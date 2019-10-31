@@ -1,0 +1,8 @@
+numpy
+scipy
+matplotlib
+adafruit_motorkit
+adafruit_motor
+adafruit_servokit
+svgwrite
+imageio

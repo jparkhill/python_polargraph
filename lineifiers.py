@@ -139,16 +139,15 @@ def cymk_to_svg(lines, outname="dump", scale = 1.0):
                              stroke=svgwrite.rgb(0, 0, 0, '%')))
     dwg.save()
 
-###
-# Now send out the lines onto this potential wherever it's sampled.
-
 def grid_lineify(f, x_lim=(0.,256) ,y_lim=(0.,256), ntraj = 600,
             max_step = 3000, gamma = 0.02, dt = 9., e0 = 0.1,
             T = 0.1,
             e_thresh = 0.001, h = 2e-1, m = 3, bounce = False
            ):
     """
-    Units here are going to be pixel/sec.
+    This routine renders an image as paths of langevin dynamics
+    balls on a surface made by the color intensity. The effect
+    is a noisy scribblification. 
     """
     lines = []
     nx = int(np.sqrt(ntraj))

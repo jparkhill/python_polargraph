@@ -1,0 +1,9 @@
+Video Explanation. 
+
+How to setup the PI
+
+- enable I2C (req'd, "raspi-config") 
+- Connect it to the internet. 
+- install all desired libraries. 
+- install this package. 
+

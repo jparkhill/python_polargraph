@@ -1,5 +1,6 @@
 #
-# Rudimentary pythonic plotter.
+# Python Lineart Plotter
+#
 # Working with Adafruit's pi-stepper
 # kit. The plotter uses simple files of
 # pickled lists to draw. (mono or CYMK)
@@ -8,7 +9,7 @@
 # lines = [vertices] (ie: [[1.,1.],[1.,2.]])
 #
 # pickle the path list, put in the working directory.
-# and call "pl=plotter()" that's it. "
+# and call "pl=plotter()" that's it.
 #
 # These lists can be made from jpg by some of the
 # 'lineifiers' in the lineifiers file.
@@ -16,23 +17,37 @@
 # and best done on a desktop as they are
 # often prohibitively expensive for raspberry pi's.
 # as implemented here.
+#
+# Very little is adafruit specific or hard-coded
+# besides the fact that I use the 15th PWM channel
+# to drive the lifter servo(s), and that the PWM
+# controller is found at I2C addr 0x60
+# (i2cdetect -y 1) the images directory documents
+# some of the hardware build.
+#
 # ---------------------------------------
-# Wholly authored by John Parkhill
+# Wholly authored by John Parkhill (2019)
+# while on planes and shit.
 # (john.parkhill@gmail.com) who retains copyright.
 # John Parkhill is not liable for any consequences stemming
 # from the use of this software and no gurantees are implied
 # ---------------------------------------
 # Distributed under Creative Commons Share-alike license.
-
+#
 from math import sqrt, pow, cos, sin, pi
 import copy, pickle, time, os
 import numpy as np
 
 HAS_ADAF = True
-if (HAS_ADAF):
+try:
     from adafruit_motorkit import MotorKit as MK
     from adafruit_motor import stepper
     from adafruit_servokit import ServoKit as SK
+except Exception as Ex:
+    print("No Adafruit modules found.")
+    print(Ex)
+    print("I'm a mock plotter now.")
+    HAS_ADAF = False
 
 def sign(X):
     if X>0:
@@ -56,8 +71,8 @@ class Stepper:
         self.step_delay = step_delay
         self.step_per_rev = step_per_rev
         if (not mock):
-            self.CW = stepper.FORWARDS
-            self.CCW = stepper.BACKWARDS
+            self.CWd = stepper.FORWARD
+            self.CCWd = stepper.BACKWARD
         self.odo = 0
         self.step_pos = 0
         self.log = []
@@ -67,7 +82,7 @@ class Stepper:
             self.odo += 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                self.step.onestep(direction=self.CW)
+                self.step.onestep(direction=self.CWd)
             else:
                 self.log.append([time.time(), self.odo])
             time.sleep(self.step_delay)
@@ -76,7 +91,7 @@ class Stepper:
             self.odo -= 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                self.step.onestep(direction=self.CCW)
+                self.step.onestep(direction=self.CCWd)
             else:
                 self.log.append([time.time(), self.odo])
             time.sleep(self.step_delay)
@@ -105,7 +120,7 @@ class Lifter:
         time.sleep(0.3)
         return
 class Plotter:
-    def __init__(self, test=False):
+    def __init__(self, test=True, repl=False):
         """
         All units are cm, degrees, seconds, grams
         The top of the left cog is 0,0.
@@ -125,6 +140,8 @@ class Plotter:
         print("Step Lengt: ", self.step_dl)
         print("Min Resolu: ", (self.x_lim[1]-self.x_lim[0])//self.step_dl," X ",
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
+        if (repl): 
+            return
         if (test):
             self.plot_test()
         target_file = self.file_picker()
@@ -256,15 +273,14 @@ class Plotter:
         and then interleaving the R steps as evenly as possible in the L
         """
         if (x < self.x_lim[0]):
-            raise Exception("oob")
+            raise Exception("oob X")
         if (x > self.x_lim[1]):
-            raise Exception("oob")
+            raise Exception("oob X")
         if (y < self.y_lim[0]):
-            raise Exception("oob")
+            raise Exception("oob Y")
         if (y > self.y_lim[1]):
-            raise Exception("oob")
+            raise Exception("oob Y")
         Lp, Rp = self.xy_to_LR(x,y)
-        # Update X, LL etc. with the true position to elim drift.
         dL = Lp - self.LL
         dR = Rp - self.RR
         nL = round(abs(dL)/self.step_dl)
@@ -321,9 +337,11 @@ class Plotter:
     ###################
     # Path planning, scaling, etc.
     ###################
-    def draw_paths(self, paths):
+    def draw_paths(self, paths, n_fog = 1000):
         """
         Greedily plans paths to minimize time.
+        sorts by X to begin with. Looks at
+        the next n_fog
         """
         if (len(paths)<=0):
             return
@@ -340,7 +358,7 @@ class Plotter:
         while (len(paths_remaining)>1):
             X = endpt(paths_scheduled[-1])
             distances = []
-            for K in paths_remaining:
+            for K in paths_remaining[:1000]:
                 distances.append(endpt_dist(X[0], X[1], K))
             min_di = distances.index(min(distances))
             min_k = paths_remaining[min_di]
@@ -369,6 +387,7 @@ class Plotter:
         """
         Fit a line drawing into the plot area. while
         preserving aspect ratio.
+        TODO: auto-rotate.
         """
         cbds = self.paths_bounds(paths)
         x_dim = cbds[2]-cbds[0]
@@ -395,7 +414,7 @@ class Plotter:
         # Determine the depth.
         # CYMK is 4 X paths X pts X 2
         # B/W is paths X pts X 2
-        if type(DATA[0][0][0]) == float:
+        if type(DATA[-1][0][0]) == float:
             print("Load Pen.")
             self.init_pen()
             print("Data Bounds: ", self.paths_bounds(DATA))
@@ -407,6 +426,7 @@ class Plotter:
             else:
                 self.draw_paths(DATA)
         elif len(DATA)==4:
+            # TODO Scale CYMK
             print("Ploting CYMK")
             print("Load Cyan")
             self.init_pen()
@@ -425,9 +445,11 @@ class Plotter:
     def file_picker(self, path="./"):
         files = os.listdir(path)
         print("Line Files:")
+        print("----------")
         for I,f in enumerate(files):
             if f.count('.pkl')>0:
                 print(I,f)
+        print("----------")
         print("--- Selection ---")
         K = int(input())
         return files[K]
