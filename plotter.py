@@ -10,7 +10,7 @@
 # >>> pl.plot_calibrate()
 #
 # You need to set up the geometry correctly
-# in the code then for your setup.
+# in the code for plotter::initialize() for your setup.
 # then you can print files.
 #
 # The plotter uses simple files of
@@ -48,18 +48,31 @@
 # Distributed under Creative Commons Share-alike license.
 #
 from math import sqrt, pow, cos, sin, pi, atan
-import copy, pickle, time, os
+import copy, pickle, os
 import numpy as np
 HAS_ADAF = True
 try:
     from adafruit_motorkit import MotorKit as MK
     from adafruit_motor import stepper
     from adafruit_servokit import ServoKit as SK
+    import time
 except Exception as Ex:
     print("No Adafruit modules found.")
     print(Ex)
     print("I'm a mock plotter now.")
     HAS_ADAF = False
+    # Also mock time.
+    class timeclass:
+        def __init__(self):
+            self.TIMER = 0
+        def time(self):
+            return self.TIMER
+        def sleep(self,X):
+            self.TIMER += X
+        def hours(self):
+            return self.TIMER/(3600.)
+    time = timeclass()
+
 def sign(X):
     if X>0:
         return 1
@@ -81,7 +94,7 @@ class Stepper:
         self.mock = ada_stepper is None
         self.step_delay = step_delay
         self.step_per_rev = step_per_rev
-        if (not mock):
+        if (not self.mock):
             self.CWd = stepper.FORWARD
             self.CCWd = stepper.BACKWARD
             self.step_type = stepper.INTERLEAVE
@@ -99,24 +112,27 @@ class Stepper:
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
                 self.step.onestep(direction=self.CWd, style=self.step_type)
+                time.sleep(self.step_delay)
             else:
+                time.sleep(self.step_delay)
                 self.log.append([time.time(), self.odo])
-            time.sleep(self.step_delay)
     def CCW(self,n=1):
         for k in range(n):
             self.odo -= 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
                 self.step.onestep(direction=self.CCWd, style=self.step_type)
+                time.sleep(self.step_delay)
             else:
+                time.sleep(self.step_delay)
                 self.log.append([time.time(), self.odo])
-            time.sleep(self.step_delay)
         return
 class Lifter:
     def __init__(self, a_servo):
         self.servo = a_servo
         self.mock = a_servo is None
         self.state = 0 # 0=down, 1=up
+        self.step_delay = 0.3
         if (not self.mock):
             self.servo.actuation_range = 160
             self.servo.angle = 0
@@ -125,17 +141,19 @@ class Lifter:
     def up(self):
         if not self.mock:
             self.servo.angle = 60
+            time.sleep(self.step_delay)
         else:
+            time.sleep(self.step_delay)
             self.log.append([time.time(), 60.])
-        time.sleep(0.3)
         self.state = 1
         return
     def down(self):
         if not self.mock:
             self.servo.angle = 0
+            time.sleep(self.step_delay)
         else:
+            time.sleep(self.step_delay)
             self.log.append([time.time(), 0.])
-        time.sleep(0.3)
         self.state = 0
         return
 class Plotter:
@@ -163,8 +181,6 @@ class Plotter:
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
         if (repl):
             return
-        if (test):
-            self.plot_test()
         target_file = self.file_picker()
         self.plot_file(target_file)
         return
@@ -383,10 +399,15 @@ class Plotter:
         self.pen_up()
         print("took ", time.time()-t0, "s")
         return
+    def draw_paths(self, paths):
+        for K,path in enumerate(paths):
+            print(K, "/", len(paths))
+            self.draw_vertices(path)
+        return
     ###################
     # Path planning, scaling, etc.
     ###################
-    def draw_paths(self, paths, n_fog = 1000):
+    def sched_paths(self, paths, n_fog = 1000):
         """
         Greedily plans paths to minimize time.
         sorts by X to begin with. Looks at
@@ -414,11 +435,10 @@ class Plotter:
             paths_scheduled.append(min_k)
             paths_remaining.remove(min_k)
         paths_scheduled.append(paths_remaining.pop())
-        print("drawing...")
+        tore = []
         for K,sched in enumerate(paths_scheduled):
-            print(K, "/", len(paths_scheduled))
-            self.draw_vertices(paths[sched])
-        return
+            tore.append(copy.copy(paths[sched]))
+        return tore
     def path_bounds(self,path):
         A = np.array(path)
         if (len(A.shape) != 2):
@@ -432,13 +452,35 @@ class Plotter:
         L = [self.path_bounds(X) for X in paths if len(X)>=2]
         A = np.array(L)
         return A[:,:2].min(0).tolist()+A[:,2:].max(0).tolist()
-    def scale_paths(self, paths):
+    def cymk_bounds(self,cymk):
+        A=np.array([self.paths_bounds(cymk[0]),
+        self.paths_bounds(cymk[1]),
+        self.paths_bounds(cymk[2]),
+        self.paths_bounds(cymk[3])])
+        return A[:,:2].min(0).tolist()+A[:,2:].max(0).tolist()
+    def aspect(self,cbds):
+        x_dim = cbds[2]-cbds[0]
+        y_dim = cbds[3]-cbds[1]
+        ar_paths = x_dim/y_dim
+        return ar_paths
+    def rotate_paths(self,paths):
+        tore = []
+        for path in paths:
+            npath = []
+            for vertex in path:
+                npath.append([-1*vertex[1],vertex[0]])
+            tore.append(npath)
+        return tore
+    def auto_rotate(self, paths, cbds):
+        AR = self.aspect(cbds)
+        if AR<1:
+            return self.rotate_paths(paths)
+        return paths
+    def scale_paths(self, paths, cbds):
         """
         Fit a line drawing into the plot area. while
-        preserving aspect ratio.
-        TODO: auto-rotate.
+        preserving aspect ratio. May rotate your image.
         """
-        cbds = self.paths_bounds(paths)
         x_dim = cbds[2]-cbds[0]
         y_dim = cbds[3]-cbds[1]
         c_paths = [(cbds[2]+cbds[0])/2., (cbds[3]+cbds[1])/2.]
@@ -474,6 +516,7 @@ class Plotter:
     def plot_calibrate(self):
         print("Plotting calibration pattern....")
         print("Squares at 2cm increments around center.")
+        print("Crosses NSEW in between.")
         self.draw_circle(*self.center)
         xc,yc = self.center
         x0 = xc-1
@@ -483,47 +526,62 @@ class Plotter:
         NN = 1.
         while x0>self.x_lim[0] and x1<self.x_lim[1] and y0>self.y_lim[0] and y1<self.y_lim[1]:
             self.draw_rect(x0, x1, y0, y1)
+            self.draw_cross(xc,y0+1.)
+            self.draw_cross(xc,y1-1.)
+            self.draw_cross(x0+1.,yc)
+            self.draw_cross(x1-1.,yc)
             NN = NN+2.
             x0 = xc-NN
             y0 = yc-NN
             x1 = xc+NN
             y1 = yc+NN
         return
-    def plot_test(self):
-        self.draw_border()
-        self.draw_circle(10*self.cent, 10*self.cent)
-        self.draw_circle(10, 10)
-        self.draw_circle(10, 40)
-        self.draw_circle(40, 10)
-        self.draw_circle(40, 40)
-        self.draw_cross(50*self.cent, 50*self.cent)
-        self.draw_cross(90*self.cent, 90*self.cent)
-        # Test the path planning.
-#         self.draw_paths([ngon(40, 40),
-#                     ngon(40, 50),
-#                     ngon(45, 55),
-#                     ngon(35, 35),
-#                     ngon(50, 50),
-#                     ngon(50, 55),
-#                     ngon(60, 55)])
-    def plot_file(self, filename, border = False, scaled=True):
+    def pre_process_file(self, filename):
+        with open(filename,'rb') as f:
+            DATA = pickle.load(f)
+        OPATHS = self.pre_process(DATA)
+        with open(filename.split('.')[0]+"_processed.pkl",'wb') as f:
+            pickle.dump(OPATHS, f)
+    def pre_process(self, DATA):
+        """
+        Rotates, scales, plans
+        """
+        # Determine the depth.
+        # CYMK is 4 X paths X pts X 2
+        # B/W is paths X pts X 2
+        if len(DATA)==4 and type(DATA[0][0][0])==list:
+            print("Data Bounds: ", self.cymk_bounds(DATA))
+            print("Scaling Data....")
+            SDATA = [self.scale_paths(channel, self.cymk_bounds(DATA)) for channel in DATA]
+            print("Scaled Data to", self.cymk_bounds(SDATA))
+            OPATHS = [self.sched_paths(channel, self.cymk_bounds(SDATA)) for channel in SDATA]
+            print("Scheduled paths.")
+        else:
+            # This is a monochrome plot.
+            cbds = self.paths_bounds(DATA)
+            print("Data Bounds: ",cbds )
+            DATA = copy.copy(self.auto_rotate(DATA, cbds))
+            print("Scaling Data....")
+            SDATA = self.scale_paths(DATA, self.paths_bounds(DATA))
+            print("Scaled Data to", self.paths_bounds(SDATA))
+            OPATHS = self.sched_paths(SDATA)
+            print("Scheduled paths.")
+        return OPATHS
+    def plot_file(self, filename):
+        """
+        Only plots files in a raw format.
+        They should have been pre-processed!
+        """
         with open(filename,'rb') as f:
             DATA = pickle.load(f)
         # Determine the depth.
         # CYMK is 4 X paths X pts X 2
         # B/W is paths X pts X 2
-        if type(DATA[-1][0][0]) == float:
-            print("Load Pen.")
-            self.init_pen()
-            print("Data Bounds: ", self.paths_bounds(DATA))
-            if (scaled):
-                print("Scaling Data....")
-                SDATA = self.scale_paths(DATA)
-                print("Scaled Data.", self.paths_bounds(SDATA))
-                self.draw_paths(SDATA)
-            else:
-                self.draw_paths(DATA)
-        elif len(DATA)==4:
+        if len(DATA)==4 and type(DATA[0][0][0])==list:
+            cbds = self.cymk_bounds(DATA)
+            if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
+                print("File Data oob, pre_process_file() plz.")
+                return
             # TODO Scale CYMK
             print("Ploting CYMK")
             print("Load Cyan")
@@ -539,7 +597,16 @@ class Plotter:
             self.init_pen()
             self.draw_paths(DATA[3])
         else:
-            raise Exception("unknown data format")
+            # This is a monochrome plot.
+            # Check the plot fits in the plot_area.
+            cbds = self.paths_bounds(DATA)
+            if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
+                print("File Data oob, pre_process_file() plz.")
+                return
+            print("Load Pen.")
+            self.init_pen()
+            print("Data Bounds: ",cbds)
+            self.draw_paths(DATA)
     def file_picker(self, path="./"):
         files = os.listdir(path)
         print("Line Files:")
@@ -551,6 +618,12 @@ class Plotter:
         print("--- Selection ---")
         K = int(input())
         return files[K]
+    def pre_process_files(self, path="./"):
+        files = os.listdir(path)
+        for I,f in enumerate(files):
+            if f.count('.pkl')>0:
+                self.pre_process_file(f)
+        return
     def plot_paths(self):
         """
         A debug routine to simulate plotter action.
