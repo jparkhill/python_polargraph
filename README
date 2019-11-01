@@ -1,9 +1,9 @@
-Video Explanation. 
+Video Explanation.
 
 How to setup the PI
 
-- enable I2C (req'd, "raspi-config") 
-- Connect it to the internet. 
-- install all desired libraries. 
-- install this package. 
-
+- enable I2C (req'd, "raspi-config")
+- Connect it to the internet.
+- install all desired adafruit libraries,
+    and imaging if you want to make line art
+- install this package.

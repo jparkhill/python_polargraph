@@ -2,12 +2,22 @@
 # Python Lineart Plotter
 #
 # Working with Adafruit's pi-stepper
-# kit. The plotter uses simple files of
+# kit.
+#
+# recommended initial usage with repl ie:
+# "python3 -i plotter.py"
+# Then at the repl.
+# >>> pl.plot_calibrate()
+#
+# You need to set up the geometry correctly
+# in the code then for your setup.
+# then you can print files.
+#
+# The plotter uses simple files of
 # pickled lists to draw. (mono or CYMK)
 # file = path or [c_path, y_path ...  ]
 # path = [lines]
 # lines = [vertices] (ie: [[1.,1.],[1.,2.]])
-#
 # pickle the path list, put in the working directory.
 # and call "pl=plotter()" that's it.
 #
@@ -16,28 +26,30 @@
 # although those operations are a matter of art
 # and best done on a desktop as they are
 # often prohibitively expensive for raspberry pi's.
-# as implemented here.
+# as implemented here. The path planning is better off
+# on the desktop too.
 #
 # Very little is adafruit specific or hard-coded
 # besides the fact that I use the 15th PWM channel
 # to drive the lifter servo(s), and that the PWM
 # controller is found at I2C addr 0x60
-# (i2cdetect -y 1) the images directory documents
-# some of the hardware build.
+# (i2cdetect -y 1)
+# also stepper1 is left and stepper2 is right.
+# the images directory documents some of the hardware build.
 #
 # ---------------------------------------
 # Wholly authored by John Parkhill (2019)
-# while on planes and shit.
-# (john.parkhill@gmail.com) who retains copyright.
+# while on planes and shit (john.parkhill@gmail.com).
+# John Parkhill retains copyright.
 # John Parkhill is not liable for any consequences stemming
-# from the use of this software and no gurantees are implied
+# from the use of this software and no gurantees are implied.
 # ---------------------------------------
+#
 # Distributed under Creative Commons Share-alike license.
 #
-from math import sqrt, pow, cos, sin, pi
+from math import sqrt, pow, cos, sin, pi, atan
 import copy, pickle, time, os
 import numpy as np
-
 HAS_ADAF = True
 try:
     from adafruit_motorkit import MotorKit as MK
@@ -48,7 +60,6 @@ except Exception as Ex:
     print(Ex)
     print("I'm a mock plotter now.")
     HAS_ADAF = False
-
 def sign(X):
     if X>0:
         return 1
@@ -64,15 +75,20 @@ def ngon(X=0, Y=0, r=1, n=6, phase = 0):
                     Y+r*sin(K*step+phase)])
     return pts
 class Stepper:
-    def __init__(self, ada_stepper, mock=True,
-                step_delay = 0.02, step_per_rev = 200):
+    def __init__(self, ada_stepper,
+                step_delay = 0.05, step_per_rev = 400):
         self.step = ada_stepper
-        self.mock = mock
+        self.mock = ada_stepper is None
         self.step_delay = step_delay
         self.step_per_rev = step_per_rev
         if (not mock):
             self.CWd = stepper.FORWARD
             self.CCWd = stepper.BACKWARD
+            self.step_type = stepper.INTERLEAVE
+        else:
+            self.CWd = None
+            self.CCWd = None
+            self.step_type = None
         self.odo = 0
         self.step_pos = 0
         self.log = []
@@ -82,7 +98,7 @@ class Stepper:
             self.odo += 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                self.step.onestep(direction=self.CWd)
+                self.step.onestep(direction=self.CWd, style=self.step_type)
             else:
                 self.log.append([time.time(), self.odo])
             time.sleep(self.step_delay)
@@ -91,15 +107,16 @@ class Stepper:
             self.odo -= 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                self.step.onestep(direction=self.CCWd)
+                self.step.onestep(direction=self.CCWd, style=self.step_type)
             else:
                 self.log.append([time.time(), self.odo])
             time.sleep(self.step_delay)
         return
 class Lifter:
-    def __init__(self, a_servo, mock=True):
+    def __init__(self, a_servo):
         self.servo = a_servo
-        self.mock = mock
+        self.mock = a_servo is None
+        self.state = 0 # 0=down, 1=up
         if (not self.mock):
             self.servo.actuation_range = 160
             self.servo.angle = 0
@@ -111,6 +128,7 @@ class Lifter:
         else:
             self.log.append([time.time(), 60.])
         time.sleep(0.3)
+        self.state = 1
         return
     def down(self):
         if not self.mock:
@@ -118,42 +136,49 @@ class Lifter:
         else:
             self.log.append([time.time(), 0.])
         time.sleep(0.3)
+        self.state = 0
         return
 class Plotter:
-    def __init__(self, test=True, repl=False):
+    def __init__(self, test=False, repl=False, debug=0):
         """
         All units are cm, degrees, seconds, grams
         The top of the left cog is 0,0.
         the top of the right cog is (cog_distance,0)
 
-        Plotter must be initialized with the pen at the top,
-        center of the drawable area a distance y0 from the
-        from the cog-tops which should be roughly 2cm.
-
         The plotter adjusts lengths of left and right strings
         to achieve desired x,y. Resolution is limited
         by the cog diameters (conversely speed).
+
+        The gondola should be roughly half the mass of the
+        dangling masses. With motors off the natural
+        neutral position of the plotter along the center
+        line should be found by releasing the mass.
         """
         self.log = []
+        self.debug = debug
         self.initialize()
-        print("Print area: ", self.x_lim, self.y_lim)
+        print("Print area: X", self.x_lim," Y:", self.y_lim)
         print("Step Lengt: ", self.step_dl)
         print("Min Resolu: ", (self.x_lim[1]-self.x_lim[0])//self.step_dl," X ",
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
-        if (repl): 
+        if (repl):
             return
         if (test):
             self.plot_test()
         target_file = self.file_picker()
         self.plot_file(target_file)
         return
-    def initialize(self, cog_distance = 91.44,
-                    bottom_edge = 59.2,
-                    steps_per_rev=200, cog_circum=5.*2*pi,
-                    y0 = 2.
+    def initialize(self, cog_distance = 81.5,
+                    bottom_edge = 47.0,
+                    steps_per_rev=400, cog_circum=4.*2*pi,
+                    y0 = 7.62
                   ):
+        """
+        y0 is a neutral position where the
+        gondola sits without stepper force.
+        """
         self.cog_distance = cog_distance
-        self.steps_per_rev = 200
+        self.steps_per_rev = steps_per_rev
         self.cog_circum = cog_circum
         self.step_dl = self.cog_circum/self.steps_per_rev
         self.chain_density = 0.5 # g/cm
@@ -161,10 +186,10 @@ class Plotter:
         self.bottom_edge = bottom_edge
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
-        # Pen start position.
+        # Pen start position
         self.x0 = cog_distance/2.
         self.y0 = y0
-        self.pad = y0
+        self.pad = y0/2. # TODO: set this by tension.
         self.x_lim = (self.pad, self.cog_distance - self.pad)
         self.y_lim = (self.pad, self.bottom_edge - self.pad)
         # 1/100th of the plottable length. Just a useful unit.
@@ -176,14 +201,15 @@ class Plotter:
         print("Initializing I2C... ")
         if (HAS_ADAF):
             self.MK = MK()
-            self.s1 = Stepper(self.MK.stepper1, mock=False)
-            self.s2 = Stepper(self.MK.stepper2, mock=False)
+            self.s1 = Stepper(self.MK.stepper1, step_per_rev=steps_per_rev)
+            self.s2 = Stepper(self.MK.stepper2, step_per_rev=steps_per_rev)
             self.SK = SK(channels=16, address=0x60)
-            self.lifter = Lifter(self.SK.servo[15], mock=False)
+            self.lifter = Lifter(self.SK.servo[15])
         else:
             self.s1 = Stepper(None)
             self.s2 = Stepper(None)
             self.lifter = Lifter(None)
+            self.debug=1
         self.motor_check()
         self.init_pen()
         return
@@ -197,43 +223,151 @@ class Plotter:
         self.lifter.up()
     def init_pen(self):
         print("Initializing pen...")
-        print("Move pen to start and press ENTER.")
+        print("Move pen to neutral and press ENTER.")
         _ = input()
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
-        self.x_now = self.x0
-        self.y_now = self.y0
         self.LL = self.L0
         self.RR = self.R0
         return
-    def draw_border(self):
-        self.draw_rect(self.x_lim[0], self.x_lim[1], self.y_lim[0], self.y_lim[1])
+    #####################################
+    # Basic motion control and geometry
+    #####################################
+    def xy_to_LR(self,x,y):
+        """
+        The desired L,R lengths for an
+        xy coordinate.
+        """
+        return sqrt(x*x+y*y), sqrt(pow(self.cog_distance-x,2.0)+y*y)
+    def LR_to_xy(self,L,R):
+        D = self.cog_distance
+        x = (L**2 - R**2 + D**2)/(2*D)
+        y = sqrt(L**2 - x**2)
+        return x,y
+    @property
+    def center(self):
+        return (self.x_lim[1]+self.x_lim[0])/2.,(self.y_lim[1]+self.y_lim[0])/2.
+    @property
+    def XY(self):
+        return self.xy_now()
+    @property
+    def LR(self):
+        return self.LL, self.RR
+    @property
+    def AL(self):
+        """
+        Angle between chain and cog vector
+        at left cog.
+        """
+        X,Y = self.XY
+        return atan(Y/X)
+    @property
+    def AR(self):
+        """
+        Angle between chain and cog vector
+        at right cog.
+        """
+        X,Y = self.XY
+        return atan(Y/(self.cog_distance - X))
+    @property
+    def chain_tension(self):
+        """
+        Because the cogs only deliver vertical force at
+        an angle this diverges as y=>0 although the cogs
+        should slip before then. This helps to establish y-Bounds
+        """
         return
-    def draw_rect(self, x0, x1, y0, y1):
-        self.draw_vertices([[x0,y0],[x1,y0],[x1,y1],[x0,y1]], cycle=True)
-    def draw_circle(self, X, Y, r = 0.5, n=20):
-        verts = ngon(X, Y, r, n=20)
-        self.draw_vertices(verts)
-    def draw_cross(self, X,Y):
-        self.draw_vertices([[X-self.cent, Y-self.cent], [X+self.cent, Y+self.cent]])
-        self.draw_vertices([[X-self.cent, Y+self.cent], [X+self.cent, Y-self.cent]])
-    def plot_test(self):
-        self.draw_border()
-        self.draw_circle(10*self.cent, 10*self.cent)
-        self.draw_circle(10, 10)
-        self.draw_circle(10, 40)
-        self.draw_circle(40, 10)
-        self.draw_circle(40, 40)
-        self.draw_cross(50*self.cent, 50*self.cent)
-        self.draw_cross(90*self.cent, 90*self.cent)
-        # Test the path planning.
-#         self.draw_paths([ngon(40, 40),
-#                     ngon(40, 50),
-#                     ngon(45, 55),
-#                     ngon(35, 35),
-#                     ngon(50, 50),
-#                     ngon(50, 55),
-#                     ngon(60, 55)])
+    def xy_now(self):
+        return self.LR_to_xy(self.LL, self.RR)
+    def move_x(self,d=1):
+        X,Y = self.XY
+        self.move_to(X+d,Y)
+    def move_y(self,d=1):
+        X,Y = self.XY
+        self.move_to(X,Y+d)
+    def move_to(self,x,y):
+        """
+        linearly interpolates in polar space
+        by calculating required step differential
+        and then interleaving the R steps as evenly as possible in the L
+        THIS IS THE ONLY way to move the plotter, no routine should call
+        step_L or step_R
+        """
+        if (x < self.x_lim[0]):
+            print("oob X")
+            x = self.x_lim[0]
+        if (x > self.x_lim[1]):
+            print("oob X")
+            x = self.x_lim[1]
+        if (y < self.y_lim[0]):
+            print("oob Y")
+            y = self.y_lim[0]
+        if (y > self.y_lim[1]):
+            print("oob Y")
+            y = self.y_lim[1]
+        Lp, Rp = self.xy_to_LR(x,y)
+        dL = Lp - self.LL
+        dR = Rp - self.RR
+        nL = round(abs(dL)/self.step_dl)
+        nR = round(abs(dR)/self.step_dl)
+        if (nL == 0 and nR == 0):
+            return
+        sL = sign(dL)
+        sR = sign(dR)
+        slope = abs(dL)/abs(dR)
+        NL = 0
+        NR = 0
+        while NR < nR:
+            self.step_R(sR)
+            n_sub_L = int(NR*slope - NL)
+            for k in range(n_sub_L):
+                if (NL < nL):
+                    self.step_L(sL)
+                    NL += 1
+            NR += 1
+        while NL < nL:
+            self.step_L(sL)
+            NL += 1
+        self.log_xy()
+        return
+    def step_L(self, sign):
+        """
+        Sign >= => the line grows.
+        """
+        if sign>=0:
+            self.s1.CW()
+        else:
+            self.s1.CCW()
+        self.stepsum_L += sign
+        self.LL = self.L0+self.stepsum_L*self.step_dl
+        if (self.debug>1):
+            X,Y = self.XY
+            print("L sign:{:d} Lss:{:d} LL:{:0.1f}, X:{:.1f},Y:{:.1f}".format(
+                      sign, self.stepsum_L, self.LL, X, Y))
+        return
+    def step_R(self, sign):
+        if sign>=0:
+            self.s2.CCW()
+        else:
+            self.s2.CW()
+        self.stepsum_R += sign
+        self.RR = self.R0+self.stepsum_R*self.step_dl
+        if (self.debug>1):
+            X,Y = self.XY
+            print("R sign:{:d} Rss:{:d} RR:{:0.1f}, X:{:0.1f},Y:{:0.1f}".format(
+                      sign, self.stepsum_R, self.RR, X, Y))
+        return
+    def pen_up(self):
+        self.lifter.up()
+        return
+    def pen_down(self):
+        self.lifter.down()
+        return
+    def log_xy(self):
+        if (HAS_ADAF):
+            return
+        X,Y = self.xy_now()
+        self.log.append([time.time(), X, Y])
     def draw_vertices(self, vertices, cycle=False):
         print("Drawing ", len(vertices), " vertices ")
         t0 = time.time()
@@ -248,91 +382,6 @@ class Plotter:
             self.move_to(*vertices[0])
         self.pen_up()
         print("took ", time.time()-t0, "s")
-        return
-    def xy_to_LR(self,x,y):
-        """
-        The desired L,R lengths for an
-        xy coordinate.
-        """
-        return sqrt(x*x+y*y), sqrt(pow(self.cog_distance-x,2.0)+y*y)
-    def LR_to_xy(self,L,R):
-        D = self.cog_distance
-        x = (L**2 - R**2 + D**2)/(2*D)
-        y = sqrt(L**2 - x**2)
-        return x,y
-    def xy_now(self):
-        return self.LR_to_xy(self.LL, self.RR)
-    def log_xy(self):
-        if (HAS_ADAF):
-            return
-        X,Y = self.xy_now()
-        self.log.append([time.time(), X, Y])
-    def move_to(self,x,y):
-        """
-        linearly interpolates by calculating required step differential
-        and then interleaving the R steps as evenly as possible in the L
-        """
-        if (x < self.x_lim[0]):
-            raise Exception("oob X")
-        if (x > self.x_lim[1]):
-            raise Exception("oob X")
-        if (y < self.y_lim[0]):
-            raise Exception("oob Y")
-        if (y > self.y_lim[1]):
-            raise Exception("oob Y")
-        Lp, Rp = self.xy_to_LR(x,y)
-        dL = Lp - self.LL
-        dR = Rp - self.RR
-        nL = round(abs(dL)/self.step_dl)
-        nR = round(abs(dR)/self.step_dl)
-        if (nL == 0 and nR == 0):
-            return
-        sL = sign(dL)
-        sR = sign(dR)
-        slope = abs(dL)//abs(dR)
-        NL = 0
-        NR = 0
-        while NR < nR:
-            self.step_R(sR)
-            for k in range(int(slope)):
-                if (NL < nL):
-                    self.step_L(sL)
-                    NL += 1
-            NR += 1
-        while NR < nR:
-            self.step_R(sR)
-            NR += 1
-        while NL < nL:
-            self.step_L(sL)
-            NL += 1
-        self.set_position()
-        self.log_xy()
-        return
-    def step_L(self, sign):
-        """
-        Sign >= => the line grows.
-        """
-        if sign>=0:
-            self.s1.CW()
-        else:
-            self.s1.CCW()
-        self.stepsum_L += sign
-        return
-    def step_R(self, sign):
-        if sign>=0:
-            self.s2.CCW()
-        else:
-            self.s2.CW()
-        self.stepsum_R += sign
-        return
-    def set_position(self):
-        self.LL = self.L0+self.stepsum_L*self.step_dl
-        self.RR = self.R0+self.stepsum_R*self.step_dl
-    def pen_up(self):
-        self.lifter.up()
-        return
-    def pen_down(self):
-        self.lifter.down()
         return
     ###################
     # Path planning, scaling, etc.
@@ -408,6 +457,55 @@ class Plotter:
             A = (np.array(p) - origin_shift)*scale_fac + np.array([[(self.x_lim[1]+self.x_lim[0])/2, (self.y_lim[1]+self.y_lim[0])/2]])
             new_paths.append(A.tolist())
         return new_paths
+    #######
+    # Basic Shapes.
+    #######
+    def draw_border(self):
+        self.draw_rect(self.x_lim[0], self.x_lim[1], self.y_lim[0], self.y_lim[1])
+        return
+    def draw_rect(self, x0, x1, y0, y1):
+        self.draw_vertices([[x0,y0],[x1,y0],[x1,y1],[x0,y1]], cycle=True)
+    def draw_circle(self, X, Y, r = 0.5, n=20):
+        verts = ngon(X, Y, r, n=20)
+        self.draw_vertices(verts)
+    def draw_cross(self, X,Y):
+        self.draw_vertices([[X-self.cent, Y-self.cent], [X+self.cent, Y+self.cent]])
+        self.draw_vertices([[X-self.cent, Y+self.cent], [X+self.cent, Y-self.cent]])
+    def plot_calibrate(self):
+        print("Plotting calibration pattern....")
+        print("Squares at 2cm increments around center.")
+        self.draw_circle(*self.center)
+        xc,yc = self.center
+        x0 = xc-1
+        y0 = yc-1
+        x1 = xc+1
+        y1 = yc+1
+        NN = 1.
+        while x0>self.x_lim[0] and x1<self.x_lim[1] and y0>self.y_lim[0] and y1<self.y_lim[1]:
+            self.draw_rect(x0, x1, y0, y1)
+            NN = NN+2.
+            x0 = xc-NN
+            y0 = yc-NN
+            x1 = xc+NN
+            y1 = yc+NN
+        return
+    def plot_test(self):
+        self.draw_border()
+        self.draw_circle(10*self.cent, 10*self.cent)
+        self.draw_circle(10, 10)
+        self.draw_circle(10, 40)
+        self.draw_circle(40, 10)
+        self.draw_circle(40, 40)
+        self.draw_cross(50*self.cent, 50*self.cent)
+        self.draw_cross(90*self.cent, 90*self.cent)
+        # Test the path planning.
+#         self.draw_paths([ngon(40, 40),
+#                     ngon(40, 50),
+#                     ngon(45, 55),
+#                     ngon(35, 35),
+#                     ngon(50, 50),
+#                     ngon(50, 55),
+#                     ngon(60, 55)])
     def plot_file(self, filename, border = False, scaled=True):
         with open(filename,'rb') as f:
             DATA = pickle.load(f)
@@ -478,4 +576,4 @@ class Plotter:
         plt.show()
 
 if __name__ == "__main__":
-    pl = Plotter()
+    pl = Plotter(test=False, repl=True)
