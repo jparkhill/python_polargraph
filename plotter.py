@@ -87,6 +87,13 @@ def ngon(X=0, Y=0, r=1, n=6, phase = 0):
         pts.append([X + r*cos(K*step+phase),
                     Y+r*sin(K*step+phase)])
     return pts
+def depth(l):
+    if isinstance(l, list):
+        if (len(l)==0):
+            return 1
+        return 1 + max(depth(item) for item in l)
+    else:
+        return 0
 class Stepper:
     def __init__(self, ada_stepper,
                 step_delay = 0.05, step_per_rev = 400):
@@ -451,6 +458,8 @@ class Plotter:
     def paths_bounds(self, paths):
         L = [self.path_bounds(X) for X in paths if len(X)>=2]
         A = np.array(L)
+        if (len(L)==0):
+            return [10.,10.,10.,10]
         return A[:,:2].min(0).tolist()+A[:,2:].max(0).tolist()
     def cymk_bounds(self,cymk):
         A=np.array([self.paths_bounds(cymk[0]),
@@ -549,7 +558,7 @@ class Plotter:
         # Determine the depth.
         # CYMK is 4 X paths X pts X 2
         # B/W is paths X pts X 2
-        if len(DATA)==4 and type(DATA[0][0][0])==list:
+        if depth(DATA)==4:
             print("Data Bounds: ", self.cymk_bounds(DATA))
             print("Scaling Data....")
             SDATA = [self.scale_paths(channel, self.cymk_bounds(DATA)) for channel in DATA]
@@ -577,7 +586,7 @@ class Plotter:
         # Determine the depth.
         # CYMK is 4 X paths X pts X 2
         # B/W is paths X pts X 2
-        if len(DATA)==4 and type(DATA[0][0][0])==list:
+        if depth(DATA)==4:
             cbds = self.cymk_bounds(DATA)
             if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
                 print("File Data oob, pre_process_file() plz.")
