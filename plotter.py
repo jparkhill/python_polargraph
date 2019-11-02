@@ -191,10 +191,10 @@ class Plotter:
         target_file = self.file_picker()
         self.plot_file(target_file)
         return
-    def initialize(self, cog_distance = 81.5,
-                    bottom_edge = 47.0,
-                    steps_per_rev=400, cog_circum=4.*2*pi,
-                    y0 = 7.62
+    def initialize(self, cog_distance = 80.5,
+                    bottom_edge = 48.0,
+                    steps_per_rev=400, cog_circum=3.*2*pi,
+                    y0 = 7.
                   ):
         """
         y0 is a neutral position where the
