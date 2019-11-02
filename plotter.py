@@ -72,7 +72,6 @@ except Exception as Ex:
         def hours(self):
             return self.TIMER/(3600.)
     time = timeclass()
-
 def sign(X):
     if X>0:
         return 1
@@ -94,6 +93,30 @@ def depth(l):
         return 1 + max(depth(item) for item in l)
     else:
         return 0
+class Interpolation:
+    def __init__(self, xmax, ymax, npts=4):
+        """
+        For caternary correction.
+        Call 'plot_raw_grid' then measure your real grid.
+        either enter the points by set() or hard-code them.
+        inverse maps to what the motors should drive to by
+        using averages of neighbors.
+        """
+        self.Xs = np.linspace(0., xmax, npts)
+        self.Ys = np.linspace(0., ymax, npts)
+        self.Pts = np.stack(np.meshgrid(self.Xs,self.Ys),0).reshape(2,npts*npts).T
+        self.Zs = self.Pts.copy()
+    def set(self, new_points):
+        self.Zs = np.array(new_points)
+    def __call__(self,X,Y):
+        """
+        Map XY in pts onto Zs
+        """
+        D = np.power((self.Pts - np.array([X,Y])), 2.0).sum(-1)
+        w = np.exp(-np.clip(D,0,30.0))
+        n = w.sum()
+        w /= n
+        return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class Stepper:
     def __init__(self, ada_stepper,
                 step_delay = 0.05, step_per_rev = 400):
@@ -183,6 +206,7 @@ class Plotter:
         self.debug = debug
         self.initialize()
         print("Print area: X", self.x_lim," Y:", self.y_lim)
+        self.caternary = Interpolation(self.cog_distance, self.bottom_edge)
         print("Step Lengt: ", self.step_dl)
         print("Min Resolu: ", (self.x_lim[1]-self.x_lim[0])//self.step_dl," X ",
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
@@ -200,6 +224,7 @@ class Plotter:
         y0 is a neutral position where the
         gondola sits without stepper force.
         """
+        self.bottom_edge = bottom_edge
         self.cog_distance = cog_distance
         self.steps_per_rev = steps_per_rev
         self.cog_circum = cog_circum
@@ -265,7 +290,9 @@ class Plotter:
     def LR_to_xy(self,L,R):
         D = self.cog_distance
         x = (L**2 - R**2 + D**2)/(2*D)
-        y = sqrt(L**2 - x**2)
+        if (L**2 - x**2)<0:
+            print("Warning Bad coords L:{} R:{},x:{}".format(L,R,x))
+        y = sqrt(abs(L**2 - x**2))
         return x,y
     @property
     def center(self):
@@ -297,7 +324,8 @@ class Plotter:
         """
         Because the cogs only deliver vertical force at
         an angle this diverges as y=>0 although the cogs
-        should slip before then. This helps to establish y-Bounds
+        should slip before then. This helps to establish
+        y-Bounds
         """
         return
     def xy_now(self):
@@ -308,26 +336,31 @@ class Plotter:
     def move_y(self,d=1):
         X,Y = self.XY
         self.move_to(X,Y+d)
-    def move_to(self,x,y):
+    def move_to(self, x, y, raw=False):
         """
-        linearly interpolates in polar space
+        Applies caternary correction
+        then linearly interpolates in polar space
         by calculating required step differential
-        and then interleaving the R steps as evenly as possible in the L
-        THIS IS THE ONLY way to move the plotter, no routine should call
-        step_L or step_R
+        and then interleaving the R steps as evenly
+        as possible in the L.
+        -----------------------------------------
+        THIS IS THE ONLY way to move the plotter,
+        no routine should call step_L or step_R
         """
-        if (x < self.x_lim[0]):
-            print("oob X")
-            x = self.x_lim[0]
-        if (x > self.x_lim[1]):
-            print("oob X")
-            x = self.x_lim[1]
-        if (y < self.y_lim[0]):
-            print("oob Y")
-            y = self.y_lim[0]
-        if (y > self.y_lim[1]):
-            print("oob Y")
-            y = self.y_lim[1]
+        if (not raw):
+            if (x < self.x_lim[0]):
+                print("oob X")
+                x = self.x_lim[0]
+            if (x > self.x_lim[1]):
+                print("oob X")
+                x = self.x_lim[1]
+            if (y < self.y_lim[0]):
+                print("oob Y")
+                y = self.y_lim[0]
+            if (y > self.y_lim[1]):
+                print("oob Y")
+                y = self.y_lim[1]
+            x,y = self.caternary(x,y)
         Lp, Rp = self.xy_to_LR(x,y)
         dL = Lp - self.LL
         dR = Rp - self.RR
@@ -456,10 +489,12 @@ class Plotter:
             raise Exception("Bad Path")
         return A.min(0).tolist()+A.max(0).tolist()
     def paths_bounds(self, paths):
+        if (not type(paths)==list):
+            return [10.,10.,10.,10]
         L = [self.path_bounds(X) for X in paths if len(X)>=2]
-        A = np.array(L)
         if (len(L)==0):
             return [10.,10.,10.,10]
+        A = np.array(L)
         return A[:,:2].min(0).tolist()+A[:,2:].max(0).tolist()
     def cymk_bounds(self,cymk):
         A=np.array([self.paths_bounds(cymk[0]),
@@ -522,6 +557,25 @@ class Plotter:
     def draw_cross(self, X,Y):
         self.draw_vertices([[X-self.cent, Y-self.cent], [X+self.cent, Y+self.cent]])
         self.draw_vertices([[X-self.cent, Y+self.cent], [X+self.cent, Y-self.cent]])
+    def plot_raw_grid(self):
+        """
+        This allows you to calibrate the caternary
+        correction.
+        """
+        for X in self.caternary.Xs:
+            self.pen_up()
+            self.move_to(X,self.caternary.Ys[0],raw=True)
+            self.pen_down()
+            for Y in self.caternary.Ys:
+                self.move_to(X,Y,raw=True)
+        for Y in self.caternary.Ys:
+            self.pen_up()
+            self.move_to(self.caternary.Xs[0],Y,raw=True)
+            self.pen_down()
+            for X in self.caternary.Xs:
+                self.move_to(X,Y,raw=True)
+        self.pen_up()
+        return
     def plot_calibrate(self):
         print("Plotting calibration pattern....")
         print("Squares at 2cm increments around center.")
