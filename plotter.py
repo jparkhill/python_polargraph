@@ -119,8 +119,7 @@ class Interpolation:
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class Stepper:
     def __init__(self, ada_stepper,
-                step_delay = 0.05,
-                step_per_rev = 400):
+                step_delay = 0.05, step_per_rev = 400):
         self.step = ada_stepper
         self.mock = ada_stepper is None
         self.step_delay = step_delay
@@ -128,8 +127,7 @@ class Stepper:
         if (not self.mock):
             self.CWd = stepper.FORWARD
             self.CCWd = stepper.BACKWARD
-            self.single = stepper.INTERLEAVE
-            self.double = stepper.SINGLE
+            self.step_type = stepper.INTERLEAVE
         else:
             self.CWd = None
             self.CCWd = None
@@ -138,38 +136,27 @@ class Stepper:
         self.step_pos = 0
         self.log = []
         return
-    def CW(self, n=1, speed=1):
-        ds = 0
+    def CW(self,n=1):
         for k in range(n):
-            ds += 1*speed
-            self.odo += 1*speed
+            self.odo += 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                if (speed == 1 ):
-                    self.step.onestep(direction=self.CWd, style=self.single)
-                elif(speed == 2 ):
-                    self.step.onestep(direction=self.CWd, style=self.double)
+                self.step.onestep(direction=self.CWd, style=self.step_type)
                 time.sleep(self.step_delay)
             else:
                 time.sleep(self.step_delay)
                 self.log.append([time.time(), self.odo])
-        return ds
-    def CCW(self, n=1, speed=1):
-        ds = 0
+    def CCW(self,n=1):
         for k in range(n):
-            self.odo -= 1*speed
-            ds -= 1*speed
+            self.odo -= 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                if (speed == 1 ):
-                    self.step.onestep(direction=self.CCWd, style=self.single)
-                elif(speed == 2 ):
-                    self.step.onestep(direction=self.CCWd, style=self.double)
+                self.step.onestep(direction=self.CCWd, style=self.step_type)
                 time.sleep(self.step_delay)
             else:
                 time.sleep(self.step_delay)
                 self.log.append([time.time(), self.odo])
-        return ds
+        return
 class Lifter:
     def __init__(self, a_servo):
         self.servo = a_servo
@@ -200,7 +187,7 @@ class Lifter:
         self.state = 0
         return
 class Plotter:
-    def __init__(self, test=False, repl=False, debug=0, vertex_skip=1):
+    def __init__(self, test=False, repl=False, debug=0):
         """
         All units are cm, degrees, seconds, grams
         The top of the left cog is 0,0.
@@ -217,7 +204,6 @@ class Plotter:
         """
         self.log = []
         self.debug = debug
-        self.vertex_skip = vertex_skip
         self.initialize()
         print("Y0:",self.y0)
         print("Cog Dist {} Bottom {}".format(self.cog_distance, self.bottom_edge))
@@ -234,7 +220,7 @@ class Plotter:
     def initialize(self, cog_distance = 80.5,
                     bottom_edge = 48.0,
                     steps_per_rev=400, cog_circum=1.5*2*pi,
-                    y0 = 5.
+                    y0 = 7.
                   ):
         """
         y0 is a neutral position where the
@@ -253,8 +239,8 @@ class Plotter:
         # Pen start position
         self.x0 = cog_distance/2.
         self.y0 = y0
-        self.x_lim = (17., self.cog_distance - 17.)
-        self.y_lim = (y0+1, self.bottom_edge - 6.)
+        self.x_lim = (15., self.cog_distance - 15.)
+        self.y_lim = (y0+2, self.bottom_edge - 8.)
         # 1/100th of the plottable length. Just a useful unit.
         self.cent = min(self.x_lim[1]-self.x_lim[0],
                         self.y_lim[1]-self.y_lim[0])/100.
@@ -406,9 +392,10 @@ class Plotter:
         Sign >= => the line grows.
         """
         if sign>=0:
-            self.stepsum_L += self.s1.CW(speed = 1+self.lifter.state)
+            self.s1.CW()
         else:
-            self.stepsum_L += self.s1.CCW(speed = 1+self.lifter.state)
+            self.s1.CCW()
+        self.stepsum_L += sign
         self.LL = self.L0+self.stepsum_L*self.step_dl
         if (self.debug>1):
             X,Y = self.XY
@@ -417,9 +404,10 @@ class Plotter:
         return
     def step_R(self, sign):
         if sign>=0:
-            self.stepsum_R += self.s2.CCW(speed = 1+self.lifter.state)
+            self.s2.CCW()
         else:
-            self.stepsum_R += self.s2.CW(speed = 1+self.lifter.state)
+            self.s2.CW()
+        self.stepsum_R += sign
         self.RR = self.R0+self.stepsum_R*self.step_dl
         if (self.debug>1):
             X,Y = self.XY
@@ -437,11 +425,7 @@ class Plotter:
             return
         X,Y = self.xy_now()
         self.log.append([time.time(), X, Y])
-    def draw_vertices(self, vertices_, cycle=False):
-        if (self.vertex_skip>1):
-            vertices = vertices[::self.vertex_skip]
-        else:
-            vertices = vertices_
+    def draw_vertices(self, vertices, cycle=False):
         print("Drawing ", len(vertices), " vertices ")
         t0 = time.time()
         if (len(vertices)<2):
