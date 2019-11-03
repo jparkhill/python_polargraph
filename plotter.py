@@ -187,7 +187,7 @@ class Lifter:
         self.state = 0
         return
 class Plotter:
-    def __init__(self, test=False, repl=False, debug=0):
+    def __init__(self, test=False, repl=False, debug=0, vskip=1):
         """
         All units are cm, degrees, seconds, grams
         The top of the left cog is 0,0.
@@ -204,6 +204,7 @@ class Plotter:
         """
         self.log = []
         self.debug = debug
+        self.vskip = vskip
         self.initialize()
         print("Y0:",self.y0)
         print("Cog Dist {} Bottom {}".format(self.cog_distance, self.bottom_edge))
@@ -425,7 +426,8 @@ class Plotter:
             return
         X,Y = self.xy_now()
         self.log.append([time.time(), X, Y])
-    def draw_vertices(self, vertices, cycle=False):
+    def draw_vertices(self, vertices_, cycle=False):
+        vertices = vertices_[::self.vskip]
         print("Drawing ", len(vertices), " vertices ")
         t0 = time.time()
         if (len(vertices)<2):
