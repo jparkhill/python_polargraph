@@ -206,7 +206,7 @@ class Plotter:
         self.debug = debug
         self.initialize()
         print("Print area: X", self.x_lim," Y:", self.y_lim)
-        self.caternary = Interpolation(self.cog_distance, self.bottom_edge)
+        # self.caternary = Interpolation(self.cog_distance, self.bottom_edge)
         print("Step Lengt: ", self.step_dl)
         print("Min Resolu: ", (self.x_lim[1]-self.x_lim[0])//self.step_dl," X ",
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
@@ -360,7 +360,7 @@ class Plotter:
             if (y > self.y_lim[1]):
                 print("oob Y")
                 y = self.y_lim[1]
-            x,y = self.caternary(x,y)
+            # x,y = self.caternary(x,y)
         Lp, Rp = self.xy_to_LR(x,y)
         dL = Lp - self.LL
         dR = Rp - self.RR
