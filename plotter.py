@@ -94,7 +94,7 @@ def depth(l):
     else:
         return 0
 class Interpolation:
-    def __init__(self, xmax, ymax, npts=4):
+    def __init__(self, xmax, ymax, npts=6, pad=10.):
         """
         For caternary correction.
         Call 'plot_raw_grid' then measure your real grid.
@@ -102,8 +102,8 @@ class Interpolation:
         inverse maps to what the motors should drive to by
         using averages of neighbors.
         """
-        self.Xs = np.linspace(0., xmax, npts)
-        self.Ys = np.linspace(0., ymax, npts)
+        self.Xs = np.linspace(pad, xmax-pad, npts)
+        self.Ys = np.linspace(pad, ymax-pad, npts)
         self.Pts = np.stack(np.meshgrid(self.Xs,self.Ys),0).reshape(2,npts*npts).T
         self.Zs = self.Pts.copy()
     def set(self, new_points):
@@ -205,6 +205,8 @@ class Plotter:
         self.log = []
         self.debug = debug
         self.initialize()
+        print("Y0:",self.y0)
+        print("Cog Dist {} Bottom {}".format(self.cog_distance, self.bottom_edge))
         print("Print area: X", self.x_lim," Y:", self.y_lim)
         # self.caternary = Interpolation(self.cog_distance, self.bottom_edge)
         print("Step Lengt: ", self.step_dl)
@@ -217,7 +219,7 @@ class Plotter:
         return
     def initialize(self, cog_distance = 80.5,
                     bottom_edge = 48.0,
-                    steps_per_rev=400, cog_circum=3.*2*pi,
+                    steps_per_rev=400, cog_circum=1.5*2*pi,
                     y0 = 7.
                   ):
         """
