@@ -535,9 +535,9 @@ class Plotter:
         ar_self = (self.x_lim[1]-self.x_lim[0])/(self.y_lim[1]-self.y_lim[0])
         if ar_paths < ar_self:
             # y is the limiting.
-            scale_fac = .99*(self.y_lim[1]-self.y_lim[0])/y_dim
+            scale_fac = abs(.99*(self.y_lim[1]-self.y_lim[0])/y_dim)
         else:
-            scale_fac = .99*(self.x_lim[1]-self.x_lim[0])/x_dim
+            scale_fac = abs(.99*(self.x_lim[1]-self.x_lim[0])/x_dim)
         origin_shift = np.array([[c_paths[0],c_paths[1]]])
         new_paths = []
         for p in paths:
@@ -661,7 +661,7 @@ class Plotter:
             # This is a monochrome plot.
             cbds = self.paths_bounds(DATA)
             print("Data Bounds: ",cbds)
-            DATA = copy.copy(self.auto_rotate(DATA, cbds))
+            # DATA = copy.copy(self.auto_rotate(DATA, cbds))
             print("Scaling Data....")
             SDATA = self.scale_paths(DATA, self.paths_bounds(DATA))
             cbds = self.paths_bounds(SDATA)
