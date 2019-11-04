@@ -521,12 +521,15 @@ class Plotter:
     def auto_rotate(self, paths, cbds):
         AR = self.aspect(cbds)
         if AR<1:
+            print("Auto-Rotating.... !!!!!-----")
             return self.rotate_paths(paths)
         return paths
     def scale_paths(self, paths, cbds):
         """
         Fit a line drawing into the plot area. while
-        preserving aspect ratio. May rotate your image.
+        preserving aspect ratio.
+        Also moves image to bottom of plot area
+        (for best results. )
         """
         x_dim = cbds[2]-cbds[0]
         y_dim = cbds[3]-cbds[1]
@@ -540,10 +543,11 @@ class Plotter:
             scale_fac = abs(.99*(self.x_lim[1]-self.x_lim[0])/x_dim)
         origin_shift = np.array([[c_paths[0],c_paths[1]]])
         new_paths = []
+        Pc = np.array([[(self.x_lim[1]+self.x_lim[0])/2, (self.y_lim[1]+self.y_lim[0])/2]])
         for p in paths:
             if (len(p)<2):
                 continue
-            A = (np.array(p) - origin_shift)*scale_fac + np.array([[(self.x_lim[1]+self.x_lim[0])/2, (self.y_lim[1]+self.y_lim[0])/2]])
+            A = (np.array(p) - origin_shift)*scale_fac + Pc
             new_paths.append(A.tolist())
         return new_paths
     #######
@@ -661,7 +665,7 @@ class Plotter:
             # This is a monochrome plot.
             cbds = self.paths_bounds(DATA)
             print("Data Bounds: ",cbds)
-            # DATA = copy.copy(self.auto_rotate(DATA, cbds))
+            DATA = copy.copy(self.auto_rotate(DATA, cbds))
             print("Scaling Data....")
             SDATA = self.scale_paths(DATA, self.paths_bounds(DATA))
             cbds = self.paths_bounds(SDATA)
