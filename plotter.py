@@ -240,8 +240,8 @@ class Plotter:
         # Pen start position
         self.x0 = cog_distance/2.
         self.y0 = y0
-        self.x_lim = (15., self.cog_distance - 15.)
-        self.y_lim = (y0+2, self.bottom_edge - 8.)
+        self.x_lim = (18., self.cog_distance - 18.)
+        self.y_lim = (y0+2, self.bottom_edge - 10.)
         # 1/100th of the plottable length. Just a useful unit.
         self.cent = min(self.x_lim[1]-self.x_lim[0],
                         self.y_lim[1]-self.y_lim[0])/100.
@@ -351,16 +351,16 @@ class Plotter:
         """
         if (not raw):
             if (x < self.x_lim[0]):
-                print("oob X")
+                print("oob X", x, y)
                 x = self.x_lim[0]
             if (x > self.x_lim[1]):
-                print("oob X")
+                print("oob X", x, y)
                 x = self.x_lim[1]
             if (y < self.y_lim[0]):
-                print("oob Y")
+                print("oob Y", x, y)
                 y = self.y_lim[0]
             if (y > self.y_lim[1]):
-                print("oob Y")
+                print("oob Y", x, y)
                 y = self.y_lim[1]
             # x,y = self.caternary(x,y)
         Lp, Rp = self.xy_to_LR(x,y)
@@ -616,21 +616,10 @@ class Plotter:
         # CYMK is 4 X paths X pts X 2
         # B/W is paths X pts X 2
         if depth(DATA)==4:
-            print("Data Bounds: ", self.cymk_bounds(DATA))
-            print("Scaling Data....")
-            SDATA = [self.scale_paths(channel, self.cymk_bounds(DATA)) for channel in DATA]
-            print("Scaled Data to", self.cymk_bounds(SDATA))
-            OPATHS = [self.sched_paths(channel, self.cymk_bounds(SDATA)) for channel in SDATA]
+            OPATHS = [self.sched_paths(channel, self.cymk_bounds(DATA)) for channel in DATA]
             print("Scheduled paths.")
         else:
-            # This is a monochrome plot.
-            cbds = self.paths_bounds(DATA)
-            print("Data Bounds: ",cbds )
-            DATA = copy.copy(self.auto_rotate(DATA, cbds))
-            print("Scaling Data....")
-            SDATA = self.scale_paths(DATA, self.paths_bounds(DATA))
-            print("Scaled Data to", self.paths_bounds(SDATA))
-            OPATHS = self.sched_paths(SDATA)
+            OPATHS = self.sched_paths(DATA)
             print("Scheduled paths.")
         return OPATHS
     def plot_file(self, filename):
@@ -644,35 +633,46 @@ class Plotter:
         # CYMK is 4 X paths X pts X 2
         # B/W is paths X pts X 2
         if depth(DATA)==4:
-            cbds = self.cymk_bounds(DATA)
+            print("Data Bounds: ", self.cymk_bounds(DATA))
+            print("Scaling Data....")
+            SDATA = [self.scale_paths(channel, self.cymk_bounds(DATA)) for channel in DATA]
+            cbds = self.cymk_bounds(SDATA)
+            print("Scaled Data to",cbds)
             if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
                 print("File Data oob, pre_process_file() plz.")
                 return
-            # TODO Scale CYMK
+            # TODO Rotate CYMK
             print("Ploting CYMK")
             print("Load Cyan")
             self.init_pen()
-            self.draw_paths(DATA[0])
+            self.draw_paths(SDATA[0])
             print("Load Yellow")
             self.init_pen()
-            self.draw_paths(DATA[1])
+            self.draw_paths(SDATA[1])
             print("Load Magenta")
             self.init_pen()
-            self.draw_paths(DATA[2])
+            self.draw_paths(SDATA[2])
             print("Load Black")
             self.init_pen()
-            self.draw_paths(DATA[3])
+            self.draw_paths(SDATA[3])
         else:
             # This is a monochrome plot.
             # Check the plot fits in the plot_area.
+            # This is a monochrome plot.
             cbds = self.paths_bounds(DATA)
+            print("Data Bounds: ",cbds)
+            DATA = copy.copy(self.auto_rotate(DATA, cbds))
+            print("Scaling Data....")
+            SDATA = self.scale_paths(DATA, self.paths_bounds(DATA))
+            cbds = self.paths_bounds(SDATA)
+            print("Scaled Data to",cbds)
             if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
                 print("File Data oob, pre_process_file() plz.")
                 return
             print("Load Pen.")
             self.init_pen()
             print("Data Bounds: ",cbds)
-            self.draw_paths(DATA)
+            self.draw_paths(SDATA)
     def file_picker(self, path="./"):
         files = os.listdir(path)
         print("Line Files:")
@@ -687,7 +687,7 @@ class Plotter:
     def pre_process_files(self, path="./"):
         files = os.listdir(path)
         for I,f in enumerate(files):
-            if f.count('.pkl')>0:
+            if f.count('.pkl')>0 and f.count('_processed')<1:
                 self.pre_process_file(f)
         return
     def plot_paths(self):
