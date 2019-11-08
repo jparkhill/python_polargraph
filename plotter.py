@@ -119,7 +119,7 @@ class Interpolation:
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class Stepper:
     def __init__(self, ada_stepper,
-                step_delay = 0.05, step_per_rev = 400):
+                step_delay = 0.07, step_per_rev = 400):
         self.step = ada_stepper
         self.mock = ada_stepper is None
         self.step_delay = step_delay
@@ -246,8 +246,6 @@ class Plotter:
         self.cent = min(self.x_lim[1]-self.x_lim[0],
                         self.y_lim[1]-self.y_lim[0])/100.
         self.L0, self.R0 = self.xy_to_LR(self.x0,self.y0)
-        self.LL = self.L0
-        self.RR = self.R0
         print("Initializing I2C... ")
         if (HAS_ADAF):
             self.MK = MK()
@@ -277,8 +275,6 @@ class Plotter:
         _ = input()
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
-        self.LL = self.L0
-        self.RR = self.R0
         return
     #####################################
     # Basic motion control and geometry
@@ -377,39 +373,47 @@ class Plotter:
         NR = 0
         while NR < nR:
             self.step_R(sR)
+            NR += 1
             n_sub_L = int(NR*slope - NL)
             for k in range(n_sub_L):
                 if (NL < nL):
                     self.step_L(sL)
                     NL += 1
-            NR += 1
         while NL < nL:
             self.step_L(sL)
             NL += 1
         self.log_xy()
         return
+    @property
+    def LL(self):
+        return self.L0+self.stepsum_L*self.step_dl
+    @property
+    def RR(self):
+        return self.R0+self.stepsum_R*self.step_dl
     def step_L(self, sign):
         """
         Sign >= => the line grows.
         """
-        if sign>=0:
+        if sign>0:
             self.s1.CW()
-        else:
+        elif sign<0:
             self.s1.CCW()
+        else:
+            return
         self.stepsum_L += sign
-        self.LL = self.L0+self.stepsum_L*self.step_dl
         if (self.debug>1):
             X,Y = self.XY
             print("L sign:{:d} Lss:{:d} LL:{:0.1f}, X:{:.1f},Y:{:.1f}".format(
                       sign, self.stepsum_L, self.LL, X, Y))
         return
     def step_R(self, sign):
-        if sign>=0:
+        if sign>0:
             self.s2.CCW()
-        else:
+        elif sign<0:
             self.s2.CW()
+        else:
+            return
         self.stepsum_R += sign
-        self.RR = self.R0+self.stepsum_R*self.step_dl
         if (self.debug>1):
             X,Y = self.XY
             print("R sign:{:d} Rss:{:d} RR:{:0.1f}, X:{:0.1f},Y:{:0.1f}".format(
@@ -435,7 +439,9 @@ class Plotter:
         self.pen_up()
         self.move_to(*vertices[0])
         self.pen_down()
-        for v in vertices:
+        for K,v in enumerate(vertices):
+            if (K%1000==0):
+                print(K,"/",len(vertices)," XY ", self.XY)
             self.move_to(*v)
         if (cycle):
             self.move_to(*vertices[0])
