@@ -119,29 +119,39 @@ class Interpolation:
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class Stepper:
     def __init__(self, ada_stepper,
-                step_delay = 0.07, step_per_rev = 400):
+                step_delay = 0.07,
+                style = 'SINGLE'):
         self.step = ada_stepper
         self.mock = ada_stepper is None
         self.step_delay = step_delay
-        self.step_per_rev = step_per_rev
         if (not self.mock):
             self.CWd = stepper.FORWARD
             self.CCWd = stepper.BACKWARD
-            self.step_type = stepper.INTERLEAVE
+            if (style == 'SINGLE'):
+                self.step_type = stepper.SINGLE
+                self.step_per_rev = 200
+            else (style == 'INTERLEAVE'):
+                self.step_type = stepper.INTERLEAVE
+                self.step_per_rev = 400
         else:
             self.CWd = None
             self.CCWd = None
+            self.step_per_rev = 400
             self.step_type = None
         self.odo = 0
         self.step_pos = 0
         self.log = []
         return
+    @property
+    def angle(self):
+        return 360.0*self.step_pos/self.step_per_rev
     def CW(self,n=1):
         for k in range(n):
             self.odo += 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                self.step.onestep(direction=self.CWd, style=self.step_type)
+                self.step.onestep(direction=self.CWd,
+                                    style=self.step_type)
                 time.sleep(self.step_delay)
             else:
                 time.sleep(self.step_delay)
@@ -151,7 +161,8 @@ class Stepper:
             self.odo -= 1
             self.step_pos = self.odo % self.step_per_rev
             if (not self.mock):
-                self.step.onestep(direction=self.CCWd, style=self.step_type)
+                self.step.onestep(direction=self.CCWd,
+                                   style=self.step_type)
                 time.sleep(self.step_delay)
             else:
                 time.sleep(self.step_delay)
@@ -229,9 +240,7 @@ class Plotter:
         """
         self.bottom_edge = bottom_edge
         self.cog_distance = cog_distance
-        self.steps_per_rev = steps_per_rev
         self.cog_circum = cog_circum
-        self.step_dl = self.cog_circum/self.steps_per_rev
         self.chain_density = 0.5 # g/cm
         self.plumb_mass = 100 # g
         self.bottom_edge = bottom_edge
@@ -249,8 +258,9 @@ class Plotter:
         print("Initializing I2C... ")
         if (HAS_ADAF):
             self.MK = MK()
-            self.s1 = Stepper(self.MK.stepper1, step_per_rev=steps_per_rev)
-            self.s2 = Stepper(self.MK.stepper2, step_per_rev=steps_per_rev)
+            self.s1 = Stepper(self.MK.stepper1)
+            self.s2 = Stepper(self.MK.stepper2)
+            self.steps_per_rev = self.s1.steps_per_rev
             self.SK = SK(channels=16, address=0x60)
             self.lifter = Lifter(self.SK.servo[15])
         else:
@@ -258,6 +268,8 @@ class Plotter:
             self.s2 = Stepper(None)
             self.lifter = Lifter(None)
             self.debug=1
+            self.steps_per_rev = 400
+        self.step_dl = self.cog_circum/self.steps_per_rev
         self.motor_check()
         self.init_pen()
         return
@@ -441,7 +453,10 @@ class Plotter:
         self.pen_down()
         for K,v in enumerate(vertices):
             if (K%1000==0):
-                print(K,"/",len(vertices)," XY ", self.XY)
+                print(K,"/",len(vertices)," X{:.2f} Y{:.2f} ".format(*self.XY),
+                                    "L{:.1f} R{:.1f}".format(*self.LR))
+                print("L {:0.1f} (o)".format(self.s1.angle), self.s1.odo, self.stepsum_L)
+                print("R {:0.1f} (o)".format(self.s2.angle), self.s2.odo, self.stepsum_R)
             self.move_to(*v)
         if (cycle):
             self.move_to(*vertices[0])
