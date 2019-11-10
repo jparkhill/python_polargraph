@@ -52,7 +52,7 @@ import copy, pickle, os, time
 import numpy as np
 HAS_ADAF = True
 try:
-    from metal import *
+    from plotter_kit import *
     # from adafruit_motorkit import MotorKit as MK
     # from adafruit_servokit import ServoKit as SK
 except Exception as Ex:
@@ -265,9 +265,9 @@ class Plotter:
         self.L0, self.R0 = self.xy_to_LR(self.x0,self.y0)
         print("Initializing I2C... ")
         if (HAS_ADAF):
-            self.MK = MetalKit()
-            self.s1 = JStepper(self.MK.stepper1)
-            self.s2 = JStepper(self.MK.stepper2)
+            self.PK = PlotterKit()
+            self.s1 = JStepper(self.PK.stepper1)
+            self.s2 = JStepper(self.PK.stepper2)
             self.steps_per_rev = self.s1.steps_per_rev
             self.lifter = Lifter(self.MK.servo)
         else:

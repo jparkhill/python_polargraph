@@ -20,6 +20,6 @@ setup(
     # include_package_data=True,
     ext_modules=[],
     install_requires=[
-        'numpy', 'scipy', 'matplotlib', 'adafruit_motorkit', 'adafruit_motor',
-        'adafruit_servokit', 'svgwrite', 'imageio'
+        'numpy', 'scipy', 'matplotlib', 'svgwrite', 'imageio',
+        'adafruit-blinka', 'adafruit-circuitpython-busdevice', 'adafruit-circuitpython-register'
     ])
