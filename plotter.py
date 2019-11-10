@@ -119,7 +119,7 @@ class Interpolation:
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class Stepper:
     def __init__(self, ada_stepper,
-                step_delay = 0.07,
+                step_delay = 0.14,
                 style = 'SINGLE'):
         self.step = ada_stepper
         self.mock = ada_stepper is None
@@ -129,14 +129,17 @@ class Stepper:
             self.CCWd = stepper.BACKWARD
             if (style == 'SINGLE'):
                 self.step_type = stepper.SINGLE
-                self.step_per_rev = 200
-            else (style == 'INTERLEAVE'):
+                self.steps_per_rev = 200
+            if (style == 'DOUBLE'):
+                self.step_type = stepper.DOUBLE
+                self.steps_per_rev = 200
+            elif (style == 'INTERLEAVE'):
                 self.step_type = stepper.INTERLEAVE
-                self.step_per_rev = 400
+                self.steps_per_rev = 400
         else:
             self.CWd = None
             self.CCWd = None
-            self.step_per_rev = 400
+            self.steps_per_rev = 400
             self.step_type = None
         self.odo = 0
         self.step_pos = 0
@@ -144,11 +147,11 @@ class Stepper:
         return
     @property
     def angle(self):
-        return 360.0*self.step_pos/self.step_per_rev
+        return 360.0*self.step_pos/self.steps_per_rev
     def CW(self,n=1):
         for k in range(n):
             self.odo += 1
-            self.step_pos = self.odo % self.step_per_rev
+            self.step_pos = self.odo % self.steps_per_rev
             if (not self.mock):
                 self.step.onestep(direction=self.CWd,
                                     style=self.step_type)
@@ -159,7 +162,7 @@ class Stepper:
     def CCW(self,n=1):
         for k in range(n):
             self.odo -= 1
-            self.step_pos = self.odo % self.step_per_rev
+            self.step_pos = self.odo % self.steps_per_rev
             if (not self.mock):
                 self.step.onestep(direction=self.CCWd,
                                    style=self.step_type)
@@ -232,7 +235,7 @@ class Plotter:
     def initialize(self, cog_distance = 80.5,
                     bottom_edge = 48.0,
                     steps_per_rev=400, cog_circum=1.5*2*pi,
-                    y0 = 7.
+                    y0 = 13.
                   ):
         """
         y0 is a neutral position where the
