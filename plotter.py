@@ -48,15 +48,17 @@
 # Distributed under Creative Commons Share-alike license.
 #
 from math import sqrt, pow, cos, sin, pi, atan
-import copy, pickle, os
+import copy, pickle, os, time
 import numpy as np
 HAS_ADAF = True
 try:
-    from adafruit_motorkit import MotorKit as MK
-    from adafruit_motor import stepper
-    from adafruit_servokit import ServoKit as SK
-    import time
+    from metal import *
+    # from adafruit_motorkit import MotorKit as MK
+    # from adafruit_servokit import ServoKit as SK
 except Exception as Ex:
+    HAS_ADAF = True
+    # print(Ex)
+    # pass
     print("No Adafruit modules found.")
     print(Ex)
     print("I'm a mock plotter now.")
@@ -117,7 +119,7 @@ class Interpolation:
         n = w.sum()
         w /= n
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
-class Stepper:
+class JStepper:
     def __init__(self, ada_stepper,
                 step_delay = 0.14,
                 style = 'SINGLE'):
@@ -125,16 +127,16 @@ class Stepper:
         self.mock = ada_stepper is None
         self.step_delay = step_delay
         if (not self.mock):
-            self.CWd = stepper.FORWARD
-            self.CCWd = stepper.BACKWARD
+            self.CWd = FORWARD
+            self.CCWd = BACKWARD
             if (style == 'SINGLE'):
-                self.step_type = stepper.SINGLE
+                self.step_type = SINGLE
                 self.steps_per_rev = 200
             if (style == 'DOUBLE'):
-                self.step_type = stepper.DOUBLE
+                self.step_type = DOUBLE
                 self.steps_per_rev = 200
             elif (style == 'INTERLEAVE'):
-                self.step_type = stepper.INTERLEAVE
+                self.step_type = INTERLEAVE
                 self.steps_per_rev = 400
         else:
             self.CWd = None
@@ -145,6 +147,9 @@ class Stepper:
         self.step_pos = 0
         self.log = []
         return
+    def release(self):
+        if (not self.step is None):
+            self.step.release()
     @property
     def angle(self):
         return 360.0*self.step_pos/self.steps_per_rev
@@ -235,7 +240,7 @@ class Plotter:
     def initialize(self, cog_distance = 80.5,
                     bottom_edge = 48.0,
                     steps_per_rev=400, cog_circum=1.5*2*pi,
-                    y0 = 13.
+                    y0 = 18., x_pad = 18., y_pad = 10.
                   ):
         """
         y0 is a neutral position where the
@@ -252,23 +257,22 @@ class Plotter:
         # Pen start position
         self.x0 = cog_distance/2.
         self.y0 = y0
-        self.x_lim = (18., self.cog_distance - 18.)
-        self.y_lim = (y0+2, self.bottom_edge - 10.)
+        self.x_lim = (x_pad, self.cog_distance - x_pad)
+        self.y_lim = (y_pad, self.bottom_edge - y_pad)
         # 1/100th of the plottable length. Just a useful unit.
         self.cent = min(self.x_lim[1]-self.x_lim[0],
                         self.y_lim[1]-self.y_lim[0])/100.
         self.L0, self.R0 = self.xy_to_LR(self.x0,self.y0)
         print("Initializing I2C... ")
         if (HAS_ADAF):
-            self.MK = MK()
-            self.s1 = Stepper(self.MK.stepper1)
-            self.s2 = Stepper(self.MK.stepper2)
+            self.MK = MetalKit()
+            self.s1 = JStepper(self.MK.stepper1)
+            self.s2 = JStepper(self.MK.stepper2)
             self.steps_per_rev = self.s1.steps_per_rev
-            self.SK = SK(channels=16, address=0x60)
-            self.lifter = Lifter(self.SK.servo[15])
+            self.lifter = Lifter(self.MK.servo)
         else:
-            self.s1 = Stepper(None)
-            self.s2 = Stepper(None)
+            self.s1 = JStepper(None)
+            self.s2 = JStepper(None)
             self.lifter = Lifter(None)
             self.debug=1
             self.steps_per_rev = 400
@@ -286,6 +290,9 @@ class Plotter:
         self.lifter.up()
     def init_pen(self):
         print("Initializing pen...")
+        self.pen_up()
+        self.s1.release()
+        self.s2.release()
         print("Move pen to neutral and press ENTER.")
         _ = input()
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
