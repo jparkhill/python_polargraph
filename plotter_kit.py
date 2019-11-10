@@ -137,7 +137,7 @@ class PCA9685:
         """Stop using the pca9685."""
         self.reset()
 
-class Servo(_BaseServo):
+class Servo:
     """Control the position of a servo.
        :param ~pulseio.PWMOut pwm_out: PWM output object.
        :param int actuation_range: The physical range of motion of the servo in degrees, \

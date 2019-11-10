@@ -269,7 +269,7 @@ class Plotter:
             self.s1 = JStepper(self.PK.stepper1)
             self.s2 = JStepper(self.PK.stepper2)
             self.steps_per_rev = self.s1.steps_per_rev
-            self.lifter = Lifter(self.MK.servo)
+            self.lifter = Lifter(self.PK.servo)
         else:
             self.s1 = JStepper(None)
             self.s2 = JStepper(None)
