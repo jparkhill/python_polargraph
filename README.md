@@ -5,9 +5,9 @@ Some simple code to drive...
 
 
 ## Example Input path (made in the ipython notebook)
-![Ideal path](https://github.com/jparkhill/python_polargraph/images/input.png)
+![Ideal path](https://github.com/jparkhill/python_polargraph/blob/master/images/input.png)
 ## And the resulting output
-![What I got](https://github.com/jparkhill/python_polargraph/images/output.jpg)
+![What I got](https://github.com/jparkhill/python_polargraph/blob/master/images/output.jpg)
 
 ```
   python3 -i plotter.py
@@ -56,4 +56,4 @@ Some simple code to drive...
 
 ## Bonus
 Some random python line-artifiers I wrote while on planes to make stuff like:
-![What I got](https://github.com/jparkhill/python_polargraph/images/StalkerII.png)
+![A sad dood](https://github.com/jparkhill/python_polargraph/blob/master/images/StalkerII.png)
