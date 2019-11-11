@@ -226,7 +226,7 @@ class StepperMotor:
         # set a safe pwm freq for each output
         for i in range(4):
             if self._coil[i].frequency < 1500:
-                self._coil[i].frequency = 2000
+                print("WARNING Coil Freq:", self._coil[i].frequency)
         self._current_microstep = 0
         if microsteps < 2:
             raise ValueError("Microsteps must be at least 2")
