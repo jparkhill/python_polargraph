@@ -121,8 +121,8 @@ class Interpolation:
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class JStepper:
     def __init__(self, ada_stepper,
-                step_delay = 0.14,
-                style = 'SINGLE'):
+                step_delay = 0.07,
+                style = 'DOUBLE'):
         self.step = ada_stepper
         self.mock = ada_stepper is None
         self.step_delay = step_delay
@@ -240,7 +240,7 @@ class Plotter:
     def initialize(self, cog_distance = 80.5,
                     bottom_edge = 48.0,
                     steps_per_rev=400, cog_circum=1.5*2*pi,
-                    y0 = 18., x_pad = 18., y_pad = 10.
+                    y0 = 13., x_pad = 18., y_pad = 10.
                   ):
         """
         y0 is a neutral position where the
