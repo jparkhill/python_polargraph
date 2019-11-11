@@ -220,7 +220,7 @@ class StepperMotor:
       the fourth coil (unipolar) or second input to second coil (bipolar).
     :param int microsteps: Number of microsteps between full steps. Must be at least 2 and even.
     """
-    def __init__(self, ain1, ain2, bin1, bin2, *, microsteps=8):
+    def __init__(self, ain1, ain2, bin1, bin2, *, microsteps=8, power_fraction = 0.8):
         self.steps_per_rev = 200
         self._coil = (ain2, bin1, ain1, bin2)
         # set a safe pwm freq for each output
@@ -233,7 +233,7 @@ class StepperMotor:
         if microsteps % 2 == 1:
             raise ValueError("Microsteps must be even")
         self._microsteps = microsteps
-        self._curve = [int(round(0xffff * math.sin(math.pi / (2 * microsteps) * i)))
+        self._curve = [int(round(0xffff * power_fraction * math.sin(math.pi / (2 * microsteps) * i)))
                        for i in range(microsteps + 1)]
         self._update_coils()
 
@@ -247,10 +247,11 @@ class StepperMotor:
 
         # This ensures DOUBLE steps use full torque. Without it, we'd use partial torque from the
         # microstepping curve (0xb504).
-        if not microstepping and (duty_cycles[leading_coil] == duty_cycles[trailing_coil] and
-                                  duty_cycles[leading_coil] > 0):
-            duty_cycles[leading_coil] = 0xffff
-            duty_cycles[trailing_coil] = 0xffff
+        # This overheated my steppers. 
+        # if not microstepping and (duty_cycles[leading_coil] == duty_cycles[trailing_coil] and
+        #                           duty_cycles[leading_coil] > 0):
+        #     duty_cycles[leading_coil] = 0xffff
+        #     duty_cycles[trailing_coil] = 0xffff
 
         # Energize coils as appropriate:
         for i in range(4):

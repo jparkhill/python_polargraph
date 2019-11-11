@@ -122,7 +122,7 @@ class Interpolation:
 class JStepper:
     def __init__(self, ada_stepper,
                 step_delay = 0.07,
-                style = 'DOUBLE'):
+                style = 'SINGLE'):
         self.step = ada_stepper
         self.mock = ada_stepper is None
         self.step_delay = step_delay
@@ -234,8 +234,7 @@ class Plotter:
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
         if (repl):
             return
-        target_file = self.file_picker()
-        self.plot_file(target_file)
+        self.choose_file()
         return
     def initialize(self, cog_distance = 80.5,
                     bottom_edge = 48.0,
@@ -719,6 +718,10 @@ class Plotter:
         print("--- Selection ---")
         K = int(input())
         return files[K]
+    def choose_file(self):
+        target_file = self.file_picker()
+        self.plot_file(target_file)
+        return
     def pre_process_files(self, path="./"):
         files = os.listdir(path)
         for I,f in enumerate(files):
