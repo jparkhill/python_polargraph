@@ -15,12 +15,15 @@ Some simple code to drive...
   >>> pl.choose_file()
 ```
 
-## Hardware
-- adafruit stepper kit
-- Nema17 steppers (x2) 300ma, 12V (these suckers are barely up to the task but all the kit can drive.)
-- 2 ordinary SG 90 servos.
-- a 12V power supply.
-- A RaspberryPi (any sort)
+## Mandatory Hardware
+- adafruit stepper kit (~20$)
+- Nema17 steppers (x2) 300ma, 12V (these suckers are barely up to the task but all the kit can drive.) (~10$)
+- 2 ordinary SG 90 servos. (~5$)
+- a 12V power supply. (~5$)
+- A RaspberryPi (any sort) (~35$)
+## Optional/improvised stuff
+- A PiTFT
+- a wireless keyboard
 - some wire, jumpers,
 - A whiteboard
 - fine-tip sharpies
@@ -29,7 +32,7 @@ Some simple code to drive...
 - 3d printed components (linked)
 
 ## Hardware Commentary
-- The adafruit ppl are pretty smart to use a cheap LED PWM controller to drive the Toshiba stepper controller in the hat. But the driver software was a bit rushed, like everything adafruit. If you use their stock packages, you can't use servo pin 15 for the lifters while using the steppers. Also the stepper library defaults to fully energizing both coils too often to try to maximize power, although in my setup this caused the steppers to overheat, lose steps (due to thermal resistance presumably) and fail. I hacked up about 3 separate repos worth of adafruit code to make one plotter_kit.py driver that works for this specific application.
+- The adafruit ppl are pretty smart to use a cheap LED PWM controller to drive the Toshiba stepper controller in the hat. But the driver software was a bit rushed, like everything adafruit. If you use their stock packages, you can't use servo pin 15 for the lifters while using the steppers because the frequency of the PWM generator needs to be changed. Also the stepper library defaults to fully energizing both coils too often to try to maximize power/torque. In my setup this caused the steppers to overheat, lose steps (due to thermal resistance presumably) and fail because about a half an Amp of power was being dumped into each stepper. I hacked up about 3 separate repos worth of adafruit code to make one plotter_kit.py driver that works for this specific application. I commented out the double stepping etc. YMMV.
 
 ## How to install/setup the PI
 
