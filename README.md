@@ -4,9 +4,9 @@ Some simple code to drive...
 - minimal dependencies. trivial geometry. basically just imperative python. It was kinda cool to make my own printer that worked. 
 
 ## Usage
-python3 -i plotter.py
->>> pl.draw_circle(pl.center)
->>> pl.choose_file()
+  python3 -i plotter.py
+  >>> pl.draw_circle(pl.center)
+  >>> pl.choose_file()
 
 ## Hardware
 - adafruit stepper kit
