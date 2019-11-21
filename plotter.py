@@ -184,12 +184,12 @@ class Lifter:
         self.step_delay = 0.3
         if (not self.mock):
             self.servo.actuation_range = 160
-            self.servo.angle = 0
+            self.servo.angle = 60
         self.log = []
         return
     def up(self):
         if not self.mock:
-            self.servo.angle = 60
+            self.servo.angle = 160
             time.sleep(self.step_delay)
         else:
             time.sleep(self.step_delay)
@@ -198,7 +198,7 @@ class Lifter:
         return
     def down(self):
         if not self.mock:
-            self.servo.angle = 0
+            self.servo.angle = 60
             time.sleep(self.step_delay)
         else:
             time.sleep(self.step_delay)
