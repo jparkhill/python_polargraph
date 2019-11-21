@@ -297,6 +297,10 @@ class Plotter:
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
         return
+    def swap_pen(self):
+        self.pen_up()
+        print("Swap Pen and press ENTER.")
+        _ = input()
     #####################################
     # Basic motion control and geometry
     #####################################
@@ -678,17 +682,29 @@ class Plotter:
             # TODO Rotate CYMK
             print("Ploting CYMK")
             print("Load Cyan")
-            self.pen_up()
-            self.draw_paths(SDATA[0])
+            self.swap_pen()
+            try:
+                self.draw_paths(SDATA[0])
+            except KeyboardInterrupt:
+                print('Skipping color.')
             print("Load Yellow")
-            self.pen_up()
-            self.draw_paths(SDATA[1])
+            self.swap_pen()
+            try:
+                self.draw_paths(SDATA[1])
+            except KeyboardInterrupt:
+                print('Skipping color.')
             print("Load Magenta")
-            self.pen_up()
-            self.draw_paths(SDATA[2])
+            self.swap_pen()
+            try:
+                self.draw_paths(SDATA[2])
+            except KeyboardInterrupt:
+                print('Skipping color.')
             print("Load Black")
-            self.pen_up()
-            self.draw_paths(SDATA[3])
+            self.swap_pen()
+            try:
+                self.draw_paths(SDATA[3])
+            except KeyboardInterrupt:
+                print('Skipping color.')
         else:
             # This is a monochrome plot.
             # Check the plot fits in the plot_area.
