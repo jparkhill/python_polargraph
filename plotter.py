@@ -121,8 +121,8 @@ class Interpolation:
         return (self.Zs*(w[:,np.newaxis])).sum(0).tolist()
 class JStepper:
     def __init__(self, ada_stepper,
-                step_delay = 0.07,
-                style = 'SINGLE'):
+                step_delay = 0.05,
+                style = 'INTERLEAVE'):
         self.step = ada_stepper
         self.mock = ada_stepper is None
         self.step_delay = step_delay
@@ -678,16 +678,16 @@ class Plotter:
             # TODO Rotate CYMK
             print("Ploting CYMK")
             print("Load Cyan")
-            self.init_pen()
+            self.pen_up()
             self.draw_paths(SDATA[0])
             print("Load Yellow")
-            self.init_pen()
+            self.pen_up()
             self.draw_paths(SDATA[1])
             print("Load Magenta")
-            self.init_pen()
+            self.pen_up()
             self.draw_paths(SDATA[2])
             print("Load Black")
-            self.init_pen()
+            self.pen_up()
             self.draw_paths(SDATA[3])
         else:
             # This is a monochrome plot.

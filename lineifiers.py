@@ -9,6 +9,96 @@ from PIL import Image
 import imageio
 import svgwrite
 
+#
+# Idea: projection of 3d paths.
+# First make a wiggle, then z-project it.
+# tilt then 2d project.
+#
+def lerp(p0,p1,npts = 600):
+    a = np.linspace(0,1,npts)
+    L=(1.-a[:,np.newaxis])*np.array(p0)[np.newaxis,:]+a[:,np.newaxis]*np.array(p1)[np.newaxis,:]
+    return L.tolist()
+
+def wiggle_fill(x_dim, y_dim, nwiggle = 80, npts=400):
+    paths = []
+    Xs = np.linspace(x_dim[0],x_dim[1],nwiggle)
+    Ys = np.linspace(y_dim[0],y_dim[1],nwiggle)
+    last_vertex = (Xs[0],Ys[0])
+    d='r'
+    N = 1
+    while N < nwiggle-1:
+        if (d == 'ld'):
+            paths.extend(lerp(last_vertex, (Xs[0], Ys[N]),npts = npts))
+            last_vertex = (Xs[0], Ys[N])
+            d ='d'
+        elif (d == 'd'):
+            N+=1
+            paths.extend(lerp(last_vertex, (Xs[0], Ys[N]),npts = npts))
+            last_vertex = (Xs[0], Ys[N])
+            d = 'ur'
+        elif (d == 'ur'):
+            paths.extend(lerp(last_vertex, (Xs[N], Ys[0]),npts = npts))
+            last_vertex = (Xs[N], Ys[0])
+            d = 'r'
+        elif (d=='r'):
+            N+=1
+            paths.extend(lerp(last_vertex, (Xs[N], Ys[0]),npts = npts))
+            last_vertex = (Xs[N], Ys[0])
+            d = 'ld'
+    N = 0
+    d='ur'
+    while N < nwiggle-1:
+        if (d == 'ld'):
+            paths.extend(lerp(last_vertex, (Xs[N], Ys[-1]),npts = npts))
+            last_vertex = (Xs[N], Ys[-1])
+            d ='r'
+        elif (d == 'd'):
+            N+=1
+            paths.extend(lerp(last_vertex, (Xs[-1], Ys[N]),npts = npts))
+            last_vertex = (Xs[-1], Ys[N])
+            d = 'ld'
+        elif (d == 'ur'):
+            paths.extend(lerp(last_vertex, (Xs[-1], Ys[N]),npts = npts))
+            last_vertex = (Xs[-1], Ys[N])
+            d = 'd'
+        elif (d=='r'):
+            N+=1
+            paths.extend(lerp(last_vertex, (Xs[N], Ys[-1]),npts = npts))
+            last_vertex = (Xs[N], Ys[-1])
+            d = 'ur'
+    return paths
+
+def smooth_path0(a_path, iters = 400):
+    path = a_path.copy()
+    for iter in range(iters):
+        new_path = [path[0]]
+        for I in range(1,len(path)-2):
+            to_app = (new_path[-1]+path[I+1])/2.
+            new_path.append(to_app)
+        new_path.append(path[-1])
+        path = np.stack(new_path,0)
+    return path
+
+def smooth_path(a_path, window = 400):
+    to_app=[a_path[0]]
+    for K in range(1,a_path.shape[0]):
+        aslice = a_path[K-window:K]
+        if len(aslice)==0:
+            to_app.append(a_path[K])
+        else:
+            to_app.append(aslice.mean(0))
+    return np.stack(to_app,0)
+
+def path_channel_distort(path, F, magn=1.):
+    """
+    Moves points in a path per a channel...
+    """
+    new_path = []
+    for vertex in path:
+        z = F(vertex[1],vertex[0])
+        new_path.append([vertex[0]+4*magn*z,vertex[1]+3*magn*z])
+    return new_path
+
 def floyd_steinberg(X, mx=255., alg = 'stucki'):
     """
     output is 1 or zero.
@@ -145,9 +235,7 @@ def grid_lineify(f, x_lim=(0.,256) ,y_lim=(0.,256), ntraj = 600,
             e_thresh = 0.001, h = 2e-1, m = 3, bounce = False
            ):
     """
-    This routine renders an image as paths of langevin dynamics
-    balls on a surface made by the color intensity. The effect
-    is a noisy scribblification. 
+    Units here are going to be pixel/sec.
     """
     lines = []
     nx = int(np.sqrt(ntraj))
