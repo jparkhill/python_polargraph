@@ -292,15 +292,15 @@ class Plotter:
         self.pen_up()
         self.s1.release()
         self.s2.release()
-        print("Move pen to neutral and press ENTER.")
+        print("Move pen near neutral and press ENTER.")
+        _ = input()
+        self.motor_check()
+        print("Tighten it up and press ENTER.")
         _ = input()
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
+        self.draw_circle(2+self.x_lim[0],2+self.y_lim[0],r=1)
         return
-    def swap_pen(self):
-        self.pen_up()
-        print("Swap Pen and press ENTER.")
-        _ = input()
     #####################################
     # Basic motion control and geometry
     #####################################
@@ -477,9 +477,28 @@ class Plotter:
         print("took ", time.time()-t0, "s")
         return
     def draw_paths(self, paths):
+        self.init_pen()
         for K,path in enumerate(paths):
-            print(K, "/", len(paths))
-            self.draw_vertices(path)
+            try:
+                print(K, "/", len(paths))
+                self.draw_vertices(path)
+            except KeyboardInterrupt:
+                print("(C)ontinue (P)ause (Q)uit these vertices:?")
+                inp = input()
+                if (inp.lower().count('c')>0):
+                    continue
+                if (inp.lower().count('p')>0):
+                    self.s1.release()
+                    self.s2.release()
+                    print("paused")
+                    _ = input()
+                    self.init_pen()
+                    continue
+                if (inp.lower().count('q')>0):
+                    self.pen_up()
+                    self.s1.release()
+                    self.s2.release()
+                    return
         return
     ###################
     # Path planning, scaling, etc.
@@ -682,29 +701,13 @@ class Plotter:
             # TODO Rotate CYMK
             print("Ploting CYMK")
             print("Load Cyan")
-            self.swap_pen()
-            try:
-                self.draw_paths(SDATA[0])
-            except KeyboardInterrupt:
-                print('Skipping color.')
+            self.draw_paths(SDATA[0])
             print("Load Yellow")
-            self.swap_pen()
-            try:
-                self.draw_paths(SDATA[1])
-            except KeyboardInterrupt:
-                print('Skipping color.')
+            self.draw_paths(SDATA[1])
             print("Load Magenta")
-            self.swap_pen()
-            try:
-                self.draw_paths(SDATA[2])
-            except KeyboardInterrupt:
-                print('Skipping color.')
+            self.draw_paths(SDATA[2])
             print("Load Black")
-            self.swap_pen()
-            try:
-                self.draw_paths(SDATA[3])
-            except KeyboardInterrupt:
-                print('Skipping color.')
+            self.draw_paths(SDATA[3])
         else:
             # This is a monochrome plot.
             # Check the plot fits in the plot_area.
@@ -719,9 +722,8 @@ class Plotter:
             if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
                 print("File Data oob, pre_process_file() plz.")
                 return
-            print("Load Pen.")
-            self.init_pen()
             print("Data Bounds: ",cbds)
+            print("Load Pen.")
             self.draw_paths(SDATA)
     def file_picker(self, path="./"):
         files = os.listdir(path)
@@ -744,29 +746,6 @@ class Plotter:
             if f.count('.pkl')>0 and f.count('_processed')<1:
                 self.pre_process_file(f)
         return
-    def plot_paths(self):
-        """
-        A debug routine to simulate plotter action.
-        """
-        s1_path = np.array(self.s1.log)
-        plt.plot(s1_path[:,0],s1_path[:,1],label="S1",alpha=0.5)
-        s2_path = np.array(self.s2.log)
-        plt.plot(s2_path[:,0],s2_path[:,1],label="S2",alpha=0.5)
-        l_path = np.array(self.lifter.log)
-        plt.plot(l_path[:,0],l_path[:,1],label="P")
-        plt.legend()
-        plt.title("Stepper Log")
-        plt.show()
-        coords = np.array(self.log)
-        plt.plot(coords[:,0], coords[:,1])
-        plt.title("xt")
-        plt.show()
-        plt.plot(coords[:,0], coords[:,2])
-        plt.title("yt")
-        plt.show()
-        plt.plot(coords[:,1], coords[:,2])
-        plt.title("Path")
-        plt.show()
 
 if __name__ == "__main__":
     pl = Plotter(test=False, repl=True)
