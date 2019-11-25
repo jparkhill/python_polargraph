@@ -232,8 +232,8 @@ class Plotter:
         print("Step Lengt: ", self.step_dl)
         print("Min Resolu: ", (self.x_lim[1]-self.x_lim[0])//self.step_dl," X ",
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
-        if (repl):
-            return
+        # if (repl):
+        #     return
         self.choose_file()
         return
     def initialize(self, cog_distance = 80.5,
@@ -547,10 +547,10 @@ class Plotter:
         return A.min(0).tolist()+A.max(0).tolist()
     def paths_bounds(self, paths):
         if (not type(paths)==list):
-            return [10.,10.,10.,10]
+            return [self.x_lim[0],self.y_lim[0],self.x_lim[1],self.y_lim[1]]
         L = [self.path_bounds(X) for X in paths if len(X)>=2]
         if (len(L)==0):
-            return [10.,10.,10.,10]
+            return [self.x_lim[0],self.y_lim[0],self.x_lim[1],self.y_lim[1]]
         A = np.array(L)
         return A[:,:2].min(0).tolist()+A[:,2:].max(0).tolist()
     def cymk_bounds(self,cymk):
@@ -598,12 +598,13 @@ class Plotter:
         origin_shift = np.array([[c_paths[0],c_paths[1]]])
         new_paths = []
         Pc = np.array([[(self.x_lim[1]+self.x_lim[0])/2, (self.y_lim[1]+self.y_lim[0])/2]])
-        if (paths is None): 
+        Shift = Pc - scale_fac*origin_shift
+        if (paths is None):
             return []
         for p in paths:
             if (len(p)<2):
                 continue
-            A = (np.array(p) - origin_shift)*scale_fac + Pc
+            A = np.array(p)*scale_fac + Shift
             new_paths.append(A.tolist())
         return new_paths
     #######
@@ -698,7 +699,8 @@ class Plotter:
             SDATA = [self.scale_paths(channel, self.cymk_bounds(DATA)) for channel in DATA]
             cbds = self.cymk_bounds(SDATA)
             print("Scaled Data to",cbds)
-            if cbds[0]<self.x_lim[0] or cbds[1]<self.y_lim[0] or cbds[2]>self.x_lim[1] or cbds[3]>self.y_lim[1]:
+            if cbds[0]<self.x_lim[0]-.1 or cbds[1]<self.y_lim[0]-.1 or cbds[2]>self.x_lim[1]+.1 or cbds[3]>self.y_lim[1]+.1:
+                print(cbds[0]<self.x_lim[0]-.1 , cbds[1]<self.y_lim[0]-.1 , cbds[2]>self.x_lim[1]+.1 , cbds[3]>self.y_lim[1]+.1)
                 print("File Data oob, pre_process_file() plz.")
                 return
             # TODO Rotate CYMK
