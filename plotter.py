@@ -300,7 +300,7 @@ class Plotter:
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
         if (draw):
-            self.draw_circle(2+self.x0[0],2+self.y0[0],r=0.5)
+            self.draw_circle(self.x0, self.y0, r=0.5)
         return
     #####################################
     # Basic motion control and geometry
@@ -598,6 +598,8 @@ class Plotter:
         origin_shift = np.array([[c_paths[0],c_paths[1]]])
         new_paths = []
         Pc = np.array([[(self.x_lim[1]+self.x_lim[0])/2, (self.y_lim[1]+self.y_lim[0])/2]])
+        if (paths is None): 
+            return []
         for p in paths:
             if (len(p)<2):
                 continue
