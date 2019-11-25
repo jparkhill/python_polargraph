@@ -277,7 +277,7 @@ class Plotter:
             self.steps_per_rev = 400
         self.step_dl = self.cog_circum/self.steps_per_rev
         self.motor_check()
-        self.init_pen()
+        self.init_pen(draw=True)
         return
     def motor_check(self):
         self.lifter.up()
@@ -287,7 +287,7 @@ class Plotter:
         self.s2.CCW()
         self.lifter.down()
         self.lifter.up()
-    def init_pen(self):
+    def init_pen(self, draw = False):
         print("Initializing pen...")
         self.pen_up()
         self.s1.release()
@@ -299,7 +299,8 @@ class Plotter:
         _ = input()
         self.stepsum_L=0 # these are KEY. They give the abs. positioning
         self.stepsum_R=0
-        self.draw_circle(2+self.x_lim[0],2+self.y_lim[0],r=1)
+        if (draw):
+            self.draw_circle(2+self.x0[0],2+self.y0[0],r=0.5)
         return
     #####################################
     # Basic motion control and geometry
