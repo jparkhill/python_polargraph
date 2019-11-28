@@ -547,10 +547,12 @@ class Plotter:
         return A.min(0).tolist()+A.max(0).tolist()
     def paths_bounds(self, paths):
         if (not type(paths)==list):
-            return [self.x_lim[0],self.y_lim[0],self.x_lim[1],self.y_lim[1]]
+            X,Y = self.center
+            return [X,Y,X,Y]
         L = [self.path_bounds(X) for X in paths if len(X)>=2]
         if (len(L)==0):
-            return [self.x_lim[0],self.y_lim[0],self.x_lim[1],self.y_lim[1]]
+            X,Y = self.center
+            return [X,Y,X,Y]
         A = np.array(L)
         return A[:,:2].min(0).tolist()+A[:,2:].max(0).tolist()
     def cymk_bounds(self,cymk):
@@ -578,7 +580,7 @@ class Plotter:
             print("Auto-Rotating.... !!!!!-----")
             return self.rotate_paths(paths)
         return paths
-    def scale_paths(self, paths, cbds):
+    def scale_paths(self, paths, cbds, reduction = 1.0):
         """
         Fit a line drawing into the plot area. while
         preserving aspect ratio.
@@ -592,9 +594,9 @@ class Plotter:
         ar_self = (self.x_lim[1]-self.x_lim[0])/(self.y_lim[1]-self.y_lim[0])
         if ar_paths < ar_self:
             # y is the limiting.
-            scale_fac = abs(.99*(self.y_lim[1]-self.y_lim[0])/y_dim)
+            scale_fac = abs(.99*(self.y_lim[1]-self.y_lim[0])/y_dim)*reduction
         else:
-            scale_fac = abs(.99*(self.x_lim[1]-self.x_lim[0])/x_dim)
+            scale_fac = abs(.99*(self.x_lim[1]-self.x_lim[0])/x_dim)*reduction
         origin_shift = np.array([[c_paths[0],c_paths[1]]])
         new_paths = []
         Pc = np.array([[(self.x_lim[1]+self.x_lim[0])/2, (self.y_lim[1]+self.y_lim[0])/2]])

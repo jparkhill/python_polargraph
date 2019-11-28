@@ -128,6 +128,10 @@ def floyd_steinberg(X, mx=255., alg = 'stucki'):
     return out[2:-2,2:-2]
 
 def rgb_to_cmyk(X, RGB_SCALE = 255):
+    """
+    Args:
+        X: an X,Y, RGB rasterized image. 
+    """
     CMYK_SCALE = 1.
     r = X[:,:,0].astype(np.float64)
     g = X[:,:,1].astype(np.float64)
