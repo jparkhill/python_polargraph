@@ -234,6 +234,10 @@ class Plotter:
                            (self.y_lim[1]-self.y_lim[0])//self.step_dl)
         # if (repl):
         #     return
+        print("(r)epl or (c)hoose file. ")
+        C = input()
+        if (C.lower()=='r'):
+            return
         self.choose_file()
         return
     def initialize(self, cog_distance = 80.5,
@@ -513,10 +517,9 @@ class Plotter:
         if (len(paths)<=0):
             return
         if (len(paths)<2):
-            self.draw_vertices(paths[0])
-            return
+            return paths
         paths_scheduled = [0]
-        paths_remaining = [X for X in range(1,len(paths)) if len(paths[X])>2]
+        paths_remaining = [X for X in range(1,len(paths)) if len(paths[X])>1]
         print("Planning ", len(paths_remaining), " paths.")
         endpt = lambda X: paths[X][-1]
         def endpt_dist(x,y,K):
@@ -531,7 +534,8 @@ class Plotter:
             min_k = paths_remaining[min_di]
             paths_scheduled.append(min_k)
             paths_remaining.remove(min_k)
-        paths_scheduled.append(paths_remaining.pop())
+        if (len(paths_remaining)>0):
+            paths_scheduled.append(paths_remaining.pop())
         tore = []
         for K,sched in enumerate(paths_scheduled):
             tore.append(copy.copy(paths[sched]))
@@ -751,6 +755,7 @@ class Plotter:
         files = os.listdir(path)
         for I,f in enumerate(files):
             if f.count('.pkl')>0 and f.count('_processed')<1:
+                print('processing:', f)
                 self.pre_process_file(f)
         return
 

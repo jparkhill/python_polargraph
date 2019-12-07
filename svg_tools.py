@@ -4,6 +4,8 @@ Can parse basic SVG's and generate coordinate paths
 to fill them appropriately. It generates simple
 [[[[c_coord_1],[c_coord_2]], [c_path_2,... ] ... ] , ... ]
 cymk plotter paths.
+
+Those paths can be made for example in using https://picsvg.com
 """
 
 import os, re
@@ -150,7 +152,7 @@ def interior_hatches_paths(paths, ys):
             tore.append([[SX[2*I],y],[SX[2*I+1],y]])
     return tore
 
-def hatch_paths_within_path(a_path, cymk, linewidth=1., slope = 0.):
+def hatch_paths_within_path(a_path, cymk, linewidth=2., slope = 0.):
     """
     Creates horiz hatches in a curve.
 
@@ -177,7 +179,7 @@ def hatch_paths_within_path(a_path, cymk, linewidth=1., slope = 0.):
     khs = interior_hatches(a_path, kys)
     return [chs,yhs,mhs,khs]
 
-def hatch_paths_within_paths(paths, cymk, linewidth=1., slope = 0.):
+def hatch_paths_within_paths(paths, cymk, linewidth=4., slope = 0.):
     """
     Creates horiz hatches in a curve.
 
@@ -338,7 +340,6 @@ def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
     else:
         return lines[-1].extend(out_paths)
 
-# https://picsvg.com/
 def svg_to_paths(filename = 'drawing.svg', fill_style = 'outline'):
     """
     Args:
