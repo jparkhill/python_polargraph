@@ -66,19 +66,21 @@ def parse_group_into_lines(g, lines, x_form_ = ident_xform,
         x_form = lambda X: XF(x_form_(X))
     else:
         x_form = x_form_
-    if ('style' in g.attributes):
+    if ('style' in g.attributes and not fill_style is 'outline'):
         fill_color = parse_fill(g.attributes['style'].value)
         fill_style = 'hatch'
-    elif ('fill' in g.attributes):
+    elif ('fill' in g.attributes and not fill_style is 'outline'):
         fill_color = parse_fill(g.attributes['fill'].value)
         fill_style = 'hatch'
     for child in g.childNodes:
         if (child.nodeName=='g'):
             parse_group_into_lines(child, lines, x_form,
-                                    fill_style=fill_style, fill_color=fill_color)
+                                    fill_style=fill_style,
+                                    fill_color=fill_color)
         elif (child.nodeName=='path'):
             parse_path_into_lines(child, lines, x_form,
-                                    fill_style=fill_style, fill_color=fill_color)
+                                    fill_style=fill_style,
+                                    fill_color=fill_color)
 
 def path_bounds(path):
     A = np.array(path)
@@ -299,10 +301,31 @@ def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
             current_path.append(x_form([X,Y]))
             Y += float(tokens.pop(0))
             current_path.append(x_form([X,Y]))
+        elif (token == 'C'):
+            try:
+                while (len(tokens)>0):
+                    if tokens[0].isalpha():
+                        break
+                    # Simple line
+                    current_path.append(x_form([X,Y]))
+                    p0x = float(tokens.pop(0))
+                    p0y = float(tokens.pop(0))
+                    C1x = float(tokens.pop(0))
+                    C1y = float(tokens.pop(0))
+                    C2x = X = float(tokens.pop(0))
+                    C2y = Y = float(tokens.pop(0))
+                    for t in [1.*X/bezier_steps for X in range(1,bezier_steps+1)]:
+                        omt = 1.-t
+                        Xp = pow(omt,3)*p0x + 3*pow(omt,2.)*t*C1x + 3*pow(t,2.)*omt*C2x+pow(t,3)*X
+                        Yp = pow(omt,3)*p0y + 3*pow(omt,2.)*t*C1y + 3*pow(t,2.)*omt*C2y+pow(t,3)*Y
+                        current_path.append(x_form([Xp,Yp]))
+            except Exception as Ex:
+                print(token)
+                print(tokens)
+                raise Ex
         elif (token == 'c'):
             try:
                 while (len(tokens)>0):
-#                     print("T", token, tokens)
                     if tokens[0].isalpha():
                         break
                     # Simple line
@@ -344,7 +367,7 @@ def svg_to_paths(filename = 'drawing.svg', fill_style = 'outline'):
     """
     Args:
         filename: an svg filename
-        fill_style: 'outline', 'hatch'
+        fill_style: 'outline', None
     Returns:
         [cpaths, ypaths... ]
         where cpaths is a list of lists of coordinate pairs [[[x,y]]]
