@@ -26,9 +26,16 @@ def ident_xform(X):
     return [X[0],X[1]]
 
 def parse_transform(t):
-    if 'scale' in t:
+    if 'scale' in t and not 'translate' in t:
         scl = float(t.replace('scale(','').replace(')',''))
         tore = lambda X: scale_xform(X, scl = scl)
+    elif 'scale' in t and 'translate' in t:
+        tokens = re.split('\(|\)|,| ', t)
+        scalei = tokens.index('scale')
+        ss = (float(tokens[scalei+1]),float(tokens[scalei+2]))
+        scalei = tokens.index('translate')
+        tt = (float(tokens[scalei+1]),float(tokens[scalei+2]))
+        return lambda X: [(X[0]+tt[0])*ss[0],(X[1]+tt[1])*ss[1]]
     elif 'matrix' in t:
         meles = t.replace('matrix(','').replace(')','').replace(',',' ').split(' ')
         a,b,c,d,e,f = list(map(float,meles))
@@ -212,7 +219,7 @@ def hatch_paths_within_paths(paths, cymk, linewidth=4., slope = 0.):
 
 def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
                                    fill_style ='outline', fill_color=[0,0,0,0],
-                                   X=0 , Y=0, bezier_steps = 20 ):
+                                   X=0 , Y=0, bezier_steps = 10 ):
     """
     Parses most of the commands found in an SVG path.
     """

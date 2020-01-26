@@ -99,8 +99,52 @@ def path_channel_distort(path, F, magn=1.):
         new_path.append([vertex[0]+4*magn*z,vertex[1]+3*magn*z])
     return new_path
 
+def image_resample(f, oversamp=1.0):
+    """
+    The last dimension is the color channel.
+    """
+    img = imageio.imread(f)
+    x = np.linspace(0,img.shape[0],img.shape[0])
+    y = np.linspace(0,img.shape[1],img.shape[1])
+    #
+    # 2x oversample the image since we'll dither it.
+    #
+    xnew = np.linspace(0, img.shape[0], img.shape[0]*oversamp)
+    ynew = np.linspace(0, img.shape[1], img.shape[1]*oversamp)
+    from scipy import interpolate
+    rc = interpolate.interp2d(x, y, img[:,:,0].flatten(), kind='linear')
+    gc = interpolate.interp2d(x, y, img[:,:,1].flatten(), kind='linear')
+    bc = interpolate.interp2d(x, y, img[:,:,2].flatten(), kind='linear')
+    rgb_new = np.stack([rc(xnew.flatten(), ynew.flatten()),
+                        gc(xnew.flatten(), ynew.flatten()),
+                        bc(xnew.flatten(), ynew.flatten())],-1).transpose(1,0,2).astype(np.uint8)
+    plt.imshow(rgb_new)
+    return rgb_new
+
+def embossed_wiggle_image(f, channel=-1, nwiggle=80):
+    """
+    Reads the image file, converts to cymk.
+    then does the wiggle effect on its channel.
+    """
+    img = imageio.imread(f)
+    y = np.linspace(0, img.shape[0], img.shape[0])
+    x = np.linspace(0, img.shape[1], img.shape[1])
+    img = rgb_to_cmyk(img, RGB_SCALE=255.)[:,:,-1]
+    from scipy import interpolate
+    F = interpolate.interp2d(y, x, img.flatten(), kind='linear')
+    sharp_wiggle = wiggle_fill((0,img.shape[1]), (0,img.shape[0]), nwiggle=nwiggle)
+    list_wiggle=np.array(sharp_wiggle).reshape(-1,2)
+    wiggle = smooth_path(list_wiggle)
+    new_path = smooth_path(np.array(path_channel_distort(wiggle, F)).reshape(-1,2),window=4)
+    P = np.array(new_path).reshape(-1,2)*np.array([[1.,-1.]])
+    plt.plot(P[:,0],-1*P[:,1])
+    # plt.plot(P[:,1]-P[:,1].min(),-1*P[:,0]+P[:,0].max())
+    plt.show()
+    return [P.tolist()]
+
 def floyd_steinberg(X, mx=255., alg = 'stucki'):
     """
+    can take the output of image_resample_and_rgb
     output is 1 or zero.
     """
     rank = len(X.shape)
@@ -130,7 +174,7 @@ def floyd_steinberg(X, mx=255., alg = 'stucki'):
 def rgb_to_cmyk(X, RGB_SCALE = 255):
     """
     Args:
-        X: an X,Y, RGB rasterized image. 
+        X: an X,Y, RGB rasterized image.
     """
     CMYK_SCALE = 1.
     r = X[:,:,0].astype(np.float64)
