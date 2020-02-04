@@ -77,7 +77,7 @@ M4           ; dynamic mode
 """
 
 def lines_to_gcode(paths, target_width = 180., rate=250.0,
-                   min_travel = 0.5,
+                   min_travel = 0.25,
                    power=400., outfile = 'plot.gcode'):
     """
     Writes monochrome lines to a gcode with desired scaling.

@@ -67,27 +67,38 @@ def parse_fill(S):
     return c,m,y,k
 
 def parse_group_into_lines(g, lines, x_form_ = ident_xform,
-                        fill_style ='outline', fill_color=[0,0,0,0]):
+                        fill_style ='outline', fill_color=[0,0,0,0],
+                        bezier_steps=20):
     if ('transform' in g.attributes):
         XF = parse_transform(g.attributes['transform'].value)
         x_form = lambda X: XF(x_form_(X))
     else:
         x_form = x_form_
     if ('style' in g.attributes and not fill_style is 'outline'):
-        fill_color = parse_fill(g.attributes['style'].value)
-        fill_style = 'hatch'
+        style = g.attributes['style'].value
+        if (style.count('fill:none')>0):
+            fill_style = 'outline'
+        elif ('style' in g.attributes and not fill_style is 'outline'):
+            fill_color = parse_fill(style)
+            fill_style = 'hatch'
     elif ('fill' in g.attributes and not fill_style is 'outline'):
         fill_color = parse_fill(g.attributes['fill'].value)
         fill_style = 'hatch'
-    for child in g.childNodes:
-        if (child.nodeName=='g'):
-            parse_group_into_lines(child, lines, x_form,
-                                    fill_style=fill_style,
-                                    fill_color=fill_color)
-        elif (child.nodeName=='path'):
-            parse_path_into_lines(child, lines, x_form,
-                                    fill_style=fill_style,
-                                    fill_color=fill_color)
+    try:
+        for child in g.childNodes:
+            if (child.nodeName=='g'):
+                parse_group_into_lines(child, lines, x_form,
+                                        fill_style=fill_style,
+                                        bezier_steps=bezier_steps,
+                                        fill_color=fill_color)
+            elif (child.nodeName=='path'):
+                parse_path_into_lines(child, lines, x_form,
+                                        fill_style=fill_style,
+                                        bezier_steps=bezier_steps,
+                                        fill_color=fill_color)
+    except Exception as Ex:
+        print(fill_style)
+        raise Ex
 
 def path_bounds(path):
     A = np.array(path)
@@ -156,6 +167,7 @@ def interior_hatches_paths(paths, ys):
         SX = sorted(xs)
         if (len(SX)%2==1):
             print("WARNING ODD INT")
+            raise Exception('odd int')
         NS = len(SX)//2
         for I in range(NS):
             tore.append([[SX[2*I],y],[SX[2*I+1],y]])
@@ -219,7 +231,7 @@ def hatch_paths_within_paths(paths, cymk, linewidth=4., slope = 0.):
 
 def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
                                    fill_style ='outline', fill_color=[0,0,0,0],
-                                   X=0 , Y=0, bezier_steps = 10 ):
+                                   X=0 , Y=0, bezier_steps = 20 ):
     """
     Parses most of the commands found in an SVG path.
     """
@@ -268,8 +280,11 @@ def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
             if (len(current_path)>0):
                 out_paths.append(copy.copy(current_path))
                 current_path = []
-            X = float(tokens.pop(0))
-            Y = float(tokens.pop(0))
+            while (len(tokens)>0):
+                if tokens[0].isalpha():
+                    break
+                X = float(tokens.pop(0))
+                Y = float(tokens.pop(0))
             X0,Y0 = X,Y
             continue
         elif (token == 'l'):
@@ -299,15 +314,33 @@ def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
                 out_paths.append(copy.copy(current_path))
                 current_path = []
         elif (token == 'h'):
-            # close the contour
             current_path.append(x_form([X,Y]))
-            X += float(tokens.pop(0))
+            while (len(tokens)>0):
+                if tokens[0].isalpha():
+                    break
+                X += float(tokens.pop(0))
+                current_path.append(x_form([X,Y]))
+        elif (token == 'H'):
             current_path.append(x_form([X,Y]))
+            while (len(tokens)>0):
+                if tokens[0].isalpha():
+                    break
+                X = float(tokens.pop(0))
+                current_path.append(x_form([X,Y]))
         elif (token == 'v'):
-            # close the contour
             current_path.append(x_form([X,Y]))
-            Y += float(tokens.pop(0))
+            while (len(tokens)>0):
+                if tokens[0].isalpha():
+                    break
+                Y += float(tokens.pop(0))
+                current_path.append(x_form([X,Y]))
+        elif (token == 'V'):
             current_path.append(x_form([X,Y]))
+            while (len(tokens)>0):
+                if tokens[0].isalpha():
+                    break
+                Y = float(tokens.pop(0))
+                current_path.append(x_form([X,Y]))
         elif (token == 'C'):
             try:
                 while (len(tokens)>0):
@@ -370,7 +403,8 @@ def parse_path_into_lines(a_path_, lines, x_form_ = ident_xform,
     else:
         return lines[-1].extend(out_paths)
 
-def svg_to_paths(filename = 'drawing.svg', fill_style = 'outline'):
+def svg_to_paths(filename = 'drawing.svg', fill_style = 'outline',
+                 bezier_steps=10):
     """
     Args:
         filename: an svg filename
@@ -387,8 +421,12 @@ def svg_to_paths(filename = 'drawing.svg', fill_style = 'outline'):
     for child in xmldoc.childNodes[0].childNodes:
         if (child.nodeName=='g'):
             parse_group_into_lines(child, lines, x_form_ = ident_xform,
-                                    fill_style =fill_style, fill_color=[0,0,0,0])
+                                    bezier_steps=bezier_steps,
+                                    fill_style =fill_style,
+                                    fill_color=[0,0,0,0])
         elif (child.nodeName=='path'):
             parse_path_into_lines(child, lines, x_form_ = ident_xform,
-                                    fill_style =fill_style, fill_color=[0,0,0,0])
+                                    bezier_steps=bezier_steps,
+                                    fill_style =fill_style,
+                                    fill_color=[0,0,0,0])
     return lines

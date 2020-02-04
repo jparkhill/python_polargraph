@@ -121,6 +121,58 @@ def image_resample(f, oversamp=1.0):
     plt.imshow(rgb_new)
     return rgb_new
 
+def raster_dither_image(f, r_=0.2, oversample=1.0, random=True):
+    """
+    Greyscale dithers an image.
+    """
+    img = imageio.imread(f)
+    x = np.linspace(0,img.shape[0],img.shape[0])
+    y = np.linspace(0,img.shape[1],img.shape[1])
+    oversamp = oversample
+    xnew = np.linspace(0, img.shape[0], img.shape[0]*oversamp)
+    ynew = np.linspace(0, img.shape[1], img.shape[1]*oversamp)
+    rc = interpolate.interp2d(x, y, img[:,:,0].flatten(), kind='linear')
+    gc = interpolate.interp2d(x, y, img[:,:,1].flatten(), kind='linear')
+    bc = interpolate.interp2d(x, y, img[:,:,2].flatten(), kind='linear')
+    rgb_new = np.stack([rc(xnew.flatten(), ynew.flatten()),
+                        gc(xnew.flatten(), ynew.flatten()),
+                        bc(xnew.flatten(), ynew.flatten())],-1).transpose(1,0,2).astype(np.uint8)
+
+    # cymk_new = rgb_to_cymk(rgb_new)
+    dithered = floyd_steinberg(rgb_new)
+    plt.imshow((255*dithered).astype(np.uint8))
+    plt.show()
+    cymk_new = rgb_to_cmyk(dithered, RGB_SCALE=1.)
+    k_lines = raster_linify(cymk_new[:,:,-1])
+    write_svg(k_lines, "bw_lines", scale=10.)
+    return k_lines
+
+def dash_dither_image(f, r_=0.2, oversample=1.0, random=True):
+    """
+    Greyscale dithers an image.
+    """
+    img = imageio.imread(f)
+    x = np.linspace(0,img.shape[0],img.shape[0])
+    y = np.linspace(0,img.shape[1],img.shape[1])
+    oversamp = oversample
+    xnew = np.linspace(0, img.shape[0], img.shape[0]*oversamp)
+    ynew = np.linspace(0, img.shape[1], img.shape[1]*oversamp)
+    rc = interpolate.interp2d(x, y, img[:,:,0].flatten(), kind='linear')
+    gc = interpolate.interp2d(x, y, img[:,:,1].flatten(), kind='linear')
+    bc = interpolate.interp2d(x, y, img[:,:,2].flatten(), kind='linear')
+    rgb_new = np.stack([rc(xnew.flatten(), ynew.flatten()),
+                        gc(xnew.flatten(), ynew.flatten()),
+                        bc(xnew.flatten(), ynew.flatten())],-1).transpose(1,0,2).astype(np.uint8)
+
+    # cymk_new = rgb_to_cymk(rgb_new)
+    dithered = floyd_steinberg(rgb_new)
+    plt.imshow((255*dithered).astype(np.uint8))
+    plt.show()
+    cymk_new = rgb_to_cmyk(dithered, RGB_SCALE=1.)
+    c_lines, y_lines, m_lines, k_lines = random_dash_linify(cymk_new, r_ = r_, random=random)
+    write_svg(k_lines, "bw_lines", scale=10.)
+    return k_lines
+
 def embossed_wiggle_image(f, channel=-1, nwiggle=80):
     """
     Reads the image file, converts to cymk.
@@ -206,6 +258,82 @@ def ngon(X=0, Y=0, r=1, n=6, phase = 0, closed = True):
         pts.append([X+r*cos(phase),
                     Y+r*sin(phase)])
     return pts
+
+def dash(X=0, Y=0, r=1, phase = 0.):
+    pts = []
+    pts.append([X,Y])
+    pts.append([X+r*cos(phase),
+                Y+r*sin(phase)])
+    return pts
+
+def dist(X,Y):
+    return np.sqrt(np.power(np.array(X)-np.array(Y),2.0).sum())
+
+def raster_linify(channel):
+    """
+    Draws ngons over a previously dithered image.
+    """
+    k_lines = []
+    right = True
+    for X in range(channel.shape[0]):
+        linestart = None
+        inline = False
+        if right == True:
+            Y=0
+            while (Y < channel.shape[1]):
+                if (inline):
+                    if (channel[X,Y]>0.5):
+                        pass
+                    else:
+                        k_lines.append(copy.copy([linestart,[X,Y]]))
+                        inline = False
+                else:
+                    if (channel[X,Y]>0.5):
+                        linestart = copy.copy([X,Y])
+                        inline=True
+                    else:
+                        pass
+                Y=Y+1
+            right = False
+        else:
+            Y=channel.shape[1]-1
+            while (Y > 0):
+                if (inline):
+                    if (channel[X,Y]>0.5):
+                        pass
+                    else:
+                        k_lines.append(copy.copy([linestart,[X,Y]]))
+                        inline = False
+                else:
+                    if (channel[X,Y]>0.5):
+                        linestart = copy.copy([X,Y])
+                        inline=True
+                    else:
+                        pass
+                Y=Y-1
+            right = True
+    return k_lines
+
+def random_dash_linify(cymk_img, r_ = 0.2, random=False):
+    """
+    Draws ngons over a previously dithered image.
+    """
+    c_lines, y_lines, m_lines, k_lines = [],[],[],[]
+    for X in range(cymk_img.shape[0]):
+        for Y in range(cymk_img.shape[1]):
+            if (random):
+                phase = random.random()*2*pi
+            else:
+                phase = 3.1415/2
+            if (cymk_img[X,Y,0]>0.5):
+                c_lines.append(dash(X, Y, r=r_, phase=phase))
+            if (cymk_img[X,Y,1]>0.5):
+                y_lines.append(dash(X, Y, r=r_, phase=phase))
+            if (cymk_img[X,Y,2]>0.5):
+                m_lines.append(dash(X, Y, r=r_, phase=phase))
+            if (cymk_img[X,Y,3]>0.5):
+                k_lines.append(dash(X, Y, r=r_, phase=phase))
+    return c_lines, y_lines, m_lines, k_lines
 
 def random_ngon_linify(cymk_img, n_min=3, n_max=6, r_min = .1, r_max = 1.):
     """
